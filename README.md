@@ -122,10 +122,14 @@ You can override these in your colorscheme or config:
 - `NeomagitTitle`
 - `NeomagitMeta`
 - `NeomagitSection`
+- `NeomagitSectionMarker`
+- `NeomagitSectionCount`
 - `NeomagitHint`
 - `NeomagitHelp`
 - `NeomagitHunk`
+- `NeomagitHunkMarker`
 - `NeomagitStash`
+- `NeomagitHash`
 - `NeomagitCommit`
 - `NeomagitWorktree`
 - `NeomagitSubmodule`

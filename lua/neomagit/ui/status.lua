@@ -4,32 +4,70 @@ local state = require("neomagit.state.session")
 local M = {}
 local ns = vim.api.nvim_create_namespace("neomagit_status")
 local highlights_defined = false
+local colorscheme_autocmd_set = false
 
 local function ensure_highlights()
   if highlights_defined then
     return
   end
 
+  if not colorscheme_autocmd_set then
+    vim.api.nvim_create_autocmd("ColorScheme", {
+      callback = function()
+        highlights_defined = false
+      end,
+    })
+    colorscheme_autocmd_set = true
+  end
+
+  local function source_fg(source_name)
+    local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = source_name, link = false })
+    if ok and type(hl) == "table" then
+      return hl.fg
+    end
+    return nil
+  end
+
+  local function set_fg_group(name, source_name, fallback_link, opts)
+    opts = opts or {}
+    local spec = { default = true }
+    local fg = source_fg(source_name)
+    if fg then
+      spec.fg = fg
+      spec.bold = opts.bold or false
+      spec.italic = opts.italic or false
+      spec.underline = opts.underline or false
+      spec.nocombine = true
+      vim.api.nvim_set_hl(0, name, spec)
+      return
+    end
+    vim.api.nvim_set_hl(0, name, { default = true, link = fallback_link })
+  end
+
   vim.api.nvim_set_hl(0, "NeomagitTitle", { default = true, link = "Title" })
   vim.api.nvim_set_hl(0, "NeomagitMeta", { default = true, link = "Comment" })
-  vim.api.nvim_set_hl(0, "NeomagitSection", { default = true, link = "Function" })
+  vim.api.nvim_set_hl(0, "NeomagitSection", { default = true, link = "Keyword" })
+  vim.api.nvim_set_hl(0, "NeomagitSectionMarker", { default = true, link = "Special" })
+  vim.api.nvim_set_hl(0, "NeomagitSectionCount", { default = true, link = "Number" })
   vim.api.nvim_set_hl(0, "NeomagitHint", { default = true, link = "SpecialComment" })
   vim.api.nvim_set_hl(0, "NeomagitHelp", { default = true, link = "String" })
   vim.api.nvim_set_hl(0, "NeomagitHunk", { default = true, link = "DiffText" })
+  vim.api.nvim_set_hl(0, "NeomagitHunkMarker", { default = true, link = "Special" })
   vim.api.nvim_set_hl(0, "NeomagitStash", { default = true, link = "Identifier" })
+  vim.api.nvim_set_hl(0, "NeomagitHash", { default = true, link = "Number" })
   vim.api.nvim_set_hl(0, "NeomagitCommit", { default = true, link = "Number" })
   vim.api.nvim_set_hl(0, "NeomagitWorktree", { default = true, link = "Directory" })
   vim.api.nvim_set_hl(0, "NeomagitSubmodule", { default = true, link = "Type" })
 
-  vim.api.nvim_set_hl(0, "NeomagitSignStaged", { default = true, link = "DiffAdd" })
-  vim.api.nvim_set_hl(0, "NeomagitSignUnstaged", { default = true, link = "DiffChange" })
-  vim.api.nvim_set_hl(0, "NeomagitSignUntracked", { default = true, link = "Directory" })
-  vim.api.nvim_set_hl(0, "NeomagitSignConflicted", { default = true, link = "DiagnosticError" })
+  set_fg_group("NeomagitSignStaged", "DiffAdd", "DiffAdd", { bold = true })
+  set_fg_group("NeomagitSignUnstaged", "DiffChange", "DiffChange", { bold = true })
+  set_fg_group("NeomagitSignUntracked", "Directory", "Directory", { bold = true })
+  set_fg_group("NeomagitSignConflicted", "DiagnosticError", "DiagnosticError", { bold = true })
 
-  vim.api.nvim_set_hl(0, "NeomagitFileStaged", { default = true, link = "DiffAdd" })
-  vim.api.nvim_set_hl(0, "NeomagitFileUnstaged", { default = true, link = "DiffChange" })
-  vim.api.nvim_set_hl(0, "NeomagitFileUntracked", { default = true, link = "Directory" })
-  vim.api.nvim_set_hl(0, "NeomagitFileConflicted", { default = true, link = "DiagnosticError" })
+  set_fg_group("NeomagitFileStaged", "DiffAdd", "String")
+  set_fg_group("NeomagitFileUnstaged", "DiffChange", "Identifier")
+  set_fg_group("NeomagitFileUntracked", "Directory", "Directory")
+  set_fg_group("NeomagitFileConflicted", "DiagnosticError", "Error")
 
   highlights_defined = true
 end
@@ -38,52 +76,17 @@ local function notify(msg, level)
   vim.notify("[neomagit] " .. msg, level or vim.log.levels.INFO)
 end
 
-local function line_group(meta)
-  if not meta then
+local function file_path_group(meta)
+  if not meta or meta.kind ~= "file" then
     return nil
   end
-
-  if meta.kind == "title" then
-    return "NeomagitTitle"
-  end
-  if meta.kind == "meta" then
-    return "NeomagitMeta"
-  end
-  if meta.kind == "section" then
-    return "NeomagitSection"
-  end
-  if meta.kind == "hint" then
-    return "NeomagitHint"
-  end
-  if meta.kind == "help" then
-    return "NeomagitHelp"
-  end
-  if meta.kind == "hunk" then
-    return "NeomagitHunk"
-  end
-  if meta.kind == "stash" then
-    return "NeomagitStash"
-  end
-  if meta.kind == "commit" then
-    return "NeomagitCommit"
-  end
-  if meta.kind == "worktree" then
-    return "NeomagitWorktree"
-  end
-  if meta.kind == "submodule" then
-    return "NeomagitSubmodule"
-  end
-  if meta.kind == "file" then
-    local map = {
-      staged = "NeomagitFileStaged",
-      unstaged = "NeomagitFileUnstaged",
-      untracked = "NeomagitFileUntracked",
-      conflicted = "NeomagitFileConflicted",
-    }
-    return map[meta.section]
-  end
-
-  return nil
+  local map = {
+    staged = "NeomagitFileStaged",
+    unstaged = "NeomagitFileUnstaged",
+    untracked = "NeomagitFileUntracked",
+    conflicted = "NeomagitFileConflicted",
+  }
+  return map[meta.section]
 end
 
 local function file_sign_group(meta)
@@ -99,6 +102,16 @@ local function file_sign_group(meta)
   return map[meta.section]
 end
 
+local function add_hl(buf, group, row, start_col, end_col)
+  if not group then
+    return
+  end
+  if start_col and end_col and end_col ~= -1 and start_col >= end_col then
+    return
+  end
+  pcall(vim.api.nvim_buf_add_highlight, buf, ns, group, row, start_col or 0, end_col or -1)
+end
+
 local function apply_highlights(session, lines)
   if config.values.ui.highlights == false then
     vim.api.nvim_buf_clear_namespace(session.buf, ns, 0, -1)
@@ -110,18 +123,65 @@ local function apply_highlights(session, lines)
 
   for lnum = 1, #lines do
     local meta = session.line_map[lnum]
-    local group = line_group(meta)
-    if group then
-      vim.api.nvim_buf_add_highlight(session.buf, ns, group, lnum - 1, 0, -1)
-    end
+    local line = lines[lnum] or ""
+    local row = lnum - 1
 
-    if meta and meta.kind == "section" then
-      vim.api.nvim_buf_add_highlight(session.buf, ns, "NeomagitMeta", lnum - 1, 0, 3)
-    end
-
-    local sign_group = file_sign_group(meta)
-    if sign_group then
-      vim.api.nvim_buf_add_highlight(session.buf, ns, sign_group, lnum - 1, 2, 3)
+    if meta then
+      if meta.kind == "title" then
+        add_hl(session.buf, "NeomagitTitle", row, 0, -1)
+      elseif meta.kind == "meta" then
+        add_hl(session.buf, "NeomagitMeta", row, 0, -1)
+      elseif meta.kind == "section" then
+        add_hl(session.buf, "NeomagitSection", row, 0, -1)
+        add_hl(session.buf, "NeomagitSectionMarker", row, 0, 3)
+        local count_start = line:find("%(%d+%)$")
+        if count_start then
+          add_hl(session.buf, "NeomagitSectionCount", row, count_start - 1, -1)
+        end
+      elseif meta.kind == "file" then
+        add_hl(session.buf, file_sign_group(meta), row, 2, 3)
+        add_hl(session.buf, file_path_group(meta), row, 4, -1)
+      elseif meta.kind == "hunk" then
+        local marker_start = line:find("@@")
+        if marker_start then
+          local marker_end = line:find("@@", marker_start + 2, true)
+          if marker_end then
+            add_hl(session.buf, "NeomagitHunkMarker", row, marker_start - 1, marker_end + 1)
+          end
+        end
+        add_hl(session.buf, "NeomagitHunk", row, 4, -1)
+      elseif meta.kind == "hint" then
+        add_hl(session.buf, "NeomagitHint", row, 0, -1)
+      elseif meta.kind == "info" then
+        add_hl(session.buf, "NeomagitMeta", row, 0, -1)
+      elseif meta.kind == "help" then
+        add_hl(session.buf, "NeomagitHelp", row, 0, -1)
+      elseif meta.kind == "stash" then
+        add_hl(session.buf, "NeomagitMeta", row, 0, 5)
+        local ref_start, ref_end = line:find("stash@{%d+}")
+        if ref_start and ref_end then
+          add_hl(session.buf, "NeomagitStash", row, ref_start - 1, ref_end)
+        end
+      elseif meta.kind == "commit" then
+        add_hl(session.buf, "NeomagitMeta", row, 0, 5)
+        local hash_start, hash_end = line:find("%x%x%x%x%x%x%x+")
+        if hash_start and hash_end then
+          add_hl(session.buf, "NeomagitHash", row, hash_start - 1, hash_end)
+        end
+      elseif meta.kind == "worktree" then
+        add_hl(session.buf, "NeomagitMeta", row, 0, 5)
+        local bracket_start = line:find("%[", 1, true)
+        if bracket_start then
+          add_hl(session.buf, "NeomagitWorktree", row, 5, bracket_start - 2)
+          add_hl(session.buf, "NeomagitMeta", row, bracket_start - 1, -1)
+        else
+          add_hl(session.buf, "NeomagitWorktree", row, 5, -1)
+        end
+      elseif meta.kind == "submodule" then
+        add_hl(session.buf, "NeomagitMeta", row, 0, 5)
+        add_hl(session.buf, "NeomagitSignUntracked", row, 5, 6)
+        add_hl(session.buf, "NeomagitSubmodule", row, 7, -1)
+      end
     end
   end
 end
@@ -194,6 +254,7 @@ local function ensure_buffer(session)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].buflisted = false
   vim.bo[buf].swapfile = false
   vim.bo[buf].filetype = "neomagit"
   vim.bo[buf].modifiable = false
@@ -459,10 +520,11 @@ end
 
 function M.open(session)
   local buf = ensure_buffer(session)
+  local win
   if config.values.ui.float then
     local width = math.min(vim.o.columns - 6, config.values.ui.max_width)
     local height = math.min(vim.o.lines - 6, vim.o.lines - 6)
-    vim.api.nvim_open_win(buf, true, {
+    win = vim.api.nvim_open_win(buf, true, {
       relative = "editor",
       row = 3,
       col = math.floor((vim.o.columns - width) / 2),
@@ -473,7 +535,20 @@ function M.open(session)
     })
   else
     vim.api.nvim_set_current_buf(buf)
+    win = vim.api.nvim_get_current_win()
   end
+
+  if win and vim.api.nvim_win_is_valid(win) then
+    vim.wo[win].number = false
+    vim.wo[win].relativenumber = false
+    vim.wo[win].signcolumn = "no"
+    vim.wo[win].foldcolumn = "0"
+    vim.wo[win].list = false
+    vim.wo[win].spell = false
+    vim.wo[win].wrap = false
+    vim.wo[win].cursorline = true
+  end
+
   attach_keymaps(buf)
   M.render(session)
   M.refresh(session)

@@ -101,10 +101,14 @@ colorscheme if desired:
   NeomagitTitle
   NeomagitMeta
   NeomagitSection
+  NeomagitSectionMarker
+  NeomagitSectionCount
   NeomagitHint
   NeomagitHelp
   NeomagitHunk
+  NeomagitHunkMarker
   NeomagitStash
+  NeomagitHash
   NeomagitCommit
   NeomagitWorktree
   NeomagitSubmodule
