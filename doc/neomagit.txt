@@ -77,10 +77,16 @@ SETUP                                                             *neomagit-setu
       conflicted = "!",
     },
     ui = {
+      style = "magit", -- "magit" | "classic"
       float = false,
       border = "rounded",
       max_width = 120,
       highlights = true,
+      magit = {
+        show_header = true,
+        show_tag_line = true,
+        compact_sections = false,
+      },
     },
     git = {
       bin = "git",
@@ -91,6 +97,10 @@ SETUP                                                             *neomagit-setu
     },
   })
 <
+
+`ui.style = "magit"` renders a Magit-like status layout with Head/Merge/Push/Tag
+header lines and status-word file rows. Use `ui.style = "classic"` for the
+original layout.
 
 ==============================================================================
 HIGHLIGHTS                                                   *neomagit-highlights*
@@ -103,6 +113,10 @@ colorscheme if desired:
   NeomagitSection
   NeomagitSectionMarker
   NeomagitSectionCount
+  NeomagitSectionTitle
+  NeomagitHeaderLabel
+  NeomagitHeaderRef
+  NeomagitHeaderSubject
   NeomagitHint
   NeomagitHelp
   NeomagitHunk
@@ -116,6 +130,11 @@ colorscheme if desired:
   NeomagitFileUnstaged
   NeomagitFileUntracked
   NeomagitFileConflicted
+  NeomagitItemStatusStaged
+  NeomagitItemStatusUnstaged
+  NeomagitItemStatusUntracked
+  NeomagitItemStatusConflicted
+  NeomagitItemPath
   NeomagitSignStaged
   NeomagitSignUnstaged
   NeomagitSignUntracked

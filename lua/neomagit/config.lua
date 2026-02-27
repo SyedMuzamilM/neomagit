@@ -9,10 +9,16 @@ local defaults = {
     conflicted = "!",
   },
   ui = {
+    style = "magit",
     float = false,
     border = "rounded",
     max_width = 120,
     highlights = true,
+    magit = {
+      show_header = true,
+      show_tag_line = true,
+      compact_sections = false,
+    },
   },
   git = {
     bin = "git",

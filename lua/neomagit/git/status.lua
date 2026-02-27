@@ -3,6 +3,10 @@ local runner = require("neomagit.git.runner")
 
 local M = {}
 
+local function trim(text)
+  return (text or ""):gsub("%s+$", "")
+end
+
 local function path_exists(path)
   return path and vim.loop.fs_stat(path) ~= nil
 end
@@ -65,9 +69,48 @@ local function run_tasks(context, tasks, on_done)
   end
 end
 
+local function build_header(branch, results)
+  local head_ref = branch.detached and "HEAD" or (branch.head or "HEAD")
+
+  local header = {
+    head = {
+      ref = head_ref,
+      subject = trim(results.head_subject and results.head_subject.stdout or ""),
+    },
+    merge = {
+      ref = trim(results.upstream_ref and results.upstream_ref.stdout or "") ~= ""
+          and trim(results.upstream_ref.stdout)
+        or branch.upstream,
+      subject = trim(results.upstream_subject and results.upstream_subject.stdout or ""),
+    },
+    push = {
+      ref = trim(results.push_ref and results.push_ref.stdout or ""),
+      subject = trim(results.push_subject and results.push_subject.stdout or ""),
+    },
+    tag = nil,
+  }
+
+  local tag_name = trim(results.head_tag and results.head_tag.stdout or "")
+  if tag_name ~= "" then
+    header.tag = {
+      name = tag_name,
+      short_hash = trim(results.head_short and results.head_short.stdout or ""),
+    }
+  end
+
+  return header
+end
+
 function M.collect(context, cb)
   run_tasks(context, {
     status = { args = { "status", "--porcelain=v1", "--branch", "--untracked-files=all" } },
+    head_subject = { args = { "show", "-s", "--format=%s", "HEAD" } },
+    upstream_ref = { args = { "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}" } },
+    upstream_subject = { args = { "show", "-s", "--format=%s", "@{upstream}" } },
+    push_ref = { args = { "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{push}" } },
+    push_subject = { args = { "show", "-s", "--format=%s", "@{push}" } },
+    head_tag = { args = { "describe", "--tags", "--exact-match", "HEAD" } },
+    head_short = { args = { "rev-parse", "--short", "HEAD" } },
     diff_unstaged = { args = { "diff", "--no-color", "--unified=0" } },
     diff_staged = { args = { "diff", "--cached", "--no-color", "--unified=0" } },
     stash_list = { args = { "stash", "list" } },
@@ -84,9 +127,12 @@ function M.collect(context, cb)
     local parsed = parsers.parse_status_porcelain(status_res.stdout)
     local diff_unstaged = parsers.parse_unified_diff(results.diff_unstaged and results.diff_unstaged.stdout or "")
     local diff_staged = parsers.parse_unified_diff(results.diff_staged and results.diff_staged.stdout or "")
+    local branch = parsed.branch or {}
+    local header = build_header(branch, results)
 
     local snapshot = {
-      branch = parsed.branch,
+      branch = branch,
+      header = header,
       sections = parsed.sections,
       hunks = {
         unstaged = diff_unstaged,
@@ -103,5 +149,7 @@ function M.collect(context, cb)
     cb(nil, snapshot)
   end)
 end
+
+M._build_header = build_header
 
 return M

@@ -100,10 +100,16 @@ require("neomagit").setup({
     conflicted = "!",
   },
   ui = {
+    style = "magit", -- "magit" | "classic"
     float = false,
     border = "rounded",
     max_width = 120,
     highlights = true,
+    magit = {
+      show_header = true, -- Head/Merge/Push/Tag lines
+      show_tag_line = true,
+      compact_sections = false,
+    },
   },
   git = {
     bin = "git",
@@ -115,6 +121,9 @@ require("neomagit").setup({
 })
 ```
 
+`ui.style = "magit"` uses a Magit-like status layout (Head/Merge/Push/Tag header + status-word file rows).
+Set `ui.style = "classic"` to keep the previous neomagit layout.
+
 ## Highlight Groups
 
 You can override these in your colorscheme or config:
@@ -124,6 +133,10 @@ You can override these in your colorscheme or config:
 - `NeomagitSection`
 - `NeomagitSectionMarker`
 - `NeomagitSectionCount`
+- `NeomagitSectionTitle`
+- `NeomagitHeaderLabel`
+- `NeomagitHeaderRef`
+- `NeomagitHeaderSubject`
 - `NeomagitHint`
 - `NeomagitHelp`
 - `NeomagitHunk`
@@ -137,6 +150,11 @@ You can override these in your colorscheme or config:
 - `NeomagitFileUnstaged`
 - `NeomagitFileUntracked`
 - `NeomagitFileConflicted`
+- `NeomagitItemStatusStaged`
+- `NeomagitItemStatusUnstaged`
+- `NeomagitItemStatusUntracked`
+- `NeomagitItemStatusConflicted`
+- `NeomagitItemPath`
 - `NeomagitSignStaged`
 - `NeomagitSignUnstaged`
 - `NeomagitSignUntracked`
