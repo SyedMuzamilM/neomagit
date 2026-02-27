@@ -1,0 +1,123 @@
+*neomagit.txt*      Neovim Git UI inspired by Magit
+
+==============================================================================
+CONTENTS                                                    *neomagit-contents*
+
+1. Introduction..............................................|neomagit-intro|
+2. Commands................................................|neomagit-commands|
+3. Keymaps..................................................|neomagit-keymaps|
+4. Setup......................................................|neomagit-setup|
+5. Highlights............................................|neomagit-highlights|
+
+==============================================================================
+INTRODUCTION                                                   *neomagit-intro*
+
+Neomagit provides a section-based Git status buffer and command popups.
+Use it as a fast porcelain workflow inside Neovim.
+
+==============================================================================
+COMMANDS                                                     *neomagit-commands*
+
+                                                        *:Neomagit*
+:Neomagit              Open status buffer for current repository.
+
+                                                        *:NeomagitLog*
+:NeomagitLog           Open graph log buffer.
+
+                                                        *:NeomagitBranch*
+:NeomagitBranch        Open branch popup.
+
+                                                        *:NeomagitStash*
+:NeomagitStash         Open stash popup.
+
+                                                        *:NeomagitRebase*
+:NeomagitRebase        Open rebase popup.
+
+                                                        *:NeomagitCherryPick*
+:NeomagitCherryPick    Open cherry-pick popup.
+
+                                                        *:NeomagitRefresh*
+:NeomagitRefresh       Refresh the status buffer.
+
+==============================================================================
+KEYMAPS                                                         *neomagit-keymaps*
+
+Global:
+  <leader>gg           Open neomagit (when keymaps="default")
+
+Status buffer:
+  q                    Close
+  g                    Refresh
+  <Tab>                Fold/unfold section
+  ?                    Toggle inline help
+  s                    Stage file/hunk
+  u                    Unstage file/hunk
+  x                    Discard file/hunk
+  c                    Commit popup
+  b                    Branch popup
+  z                    Stash popup
+  f                    Fetch
+  p                    Push/pull popup
+  r                    Rebase popup
+  A                    Cherry-pick popup
+  v                    Revert popup
+  R                    Reset popup
+  l                    Full log
+
+==============================================================================
+SETUP                                                             *neomagit-setup*
+
+>
+  require("neomagit").setup({
+    keymaps = "default", -- "default" | "none"
+    signs = {
+      staged = "S",
+      unstaged = "U",
+      untracked = "?",
+      conflicted = "!",
+    },
+    ui = {
+      float = false,
+      border = "rounded",
+      max_width = 120,
+      highlights = true,
+    },
+    git = {
+      bin = "git",
+      timeout_ms = 15000,
+    },
+    confirm = {
+      destructive = true,
+    },
+  })
+<
+
+==============================================================================
+HIGHLIGHTS                                                   *neomagit-highlights*
+
+Neomagit sets highlight groups for status readability. Override them in your
+colorscheme if desired:
+
+  NeomagitTitle
+  NeomagitMeta
+  NeomagitSection
+  NeomagitHint
+  NeomagitHelp
+  NeomagitHunk
+  NeomagitStash
+  NeomagitCommit
+  NeomagitWorktree
+  NeomagitSubmodule
+  NeomagitFileStaged
+  NeomagitFileUnstaged
+  NeomagitFileUntracked
+  NeomagitFileConflicted
+  NeomagitSignStaged
+  NeomagitSignUnstaged
+  NeomagitSignUntracked
+  NeomagitSignConflicted
+
+Set `ui.highlights = false` to disable buffer-applied highlights.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
