@@ -8,6 +8,9 @@ local function split_lines(text)
   for line in (text .. "\n"):gmatch("(.-)\n") do
     table.insert(lines, line)
   end
+  if lines[#lines] == "" then
+    table.remove(lines, #lines)
+  end
   return lines
 end
 

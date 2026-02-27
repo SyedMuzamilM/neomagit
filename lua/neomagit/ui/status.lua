@@ -57,6 +57,10 @@ local function ensure_highlights()
   vim.api.nvim_set_hl(0, "NeomagitHelp", { default = true, link = "String" })
   vim.api.nvim_set_hl(0, "NeomagitHunk", { default = true, link = "DiffText" })
   vim.api.nvim_set_hl(0, "NeomagitHunkMarker", { default = true, link = "Special" })
+  vim.api.nvim_set_hl(0, "NeomagitDiffAdd", { default = true, link = "DiffAdd" })
+  vim.api.nvim_set_hl(0, "NeomagitDiffDelete", { default = true, link = "DiffDelete" })
+  vim.api.nvim_set_hl(0, "NeomagitDiffContext", { default = true, link = "Normal" })
+  vim.api.nvim_set_hl(0, "NeomagitDiffNote", { default = true, link = "Comment" })
   vim.api.nvim_set_hl(0, "NeomagitStash", { default = true, link = "Identifier" })
   vim.api.nvim_set_hl(0, "NeomagitHash", { default = true, link = "Number" })
   vim.api.nvim_set_hl(0, "NeomagitCommit", { default = true, link = "Number" })
@@ -192,14 +196,27 @@ local function apply_highlights(session, lines)
           add_hl(session.buf, file_path_group(meta), row, 4, -1)
         end
       elseif meta.kind == "hunk" then
-        local marker_start = line:find("@@")
-        if marker_start then
-          local marker_end = line:find("@@", marker_start + 2, true)
-          if marker_end then
-            add_hl(session.buf, "NeomagitHunkMarker", row, marker_start - 1, marker_end + 1)
+        if meta.hunk_line_type then
+          local offset = meta.style == "magit" and 4 or 6
+          local group = "NeomagitDiffContext"
+          if meta.hunk_line_type == "+" then
+            group = "NeomagitDiffAdd"
+          elseif meta.hunk_line_type == "-" then
+            group = "NeomagitDiffDelete"
+          elseif meta.hunk_line_type == "\\" then
+            group = "NeomagitDiffNote"
           end
+          add_hl(session.buf, group, row, offset, -1)
+        else
+          local marker_start = line:find("@@")
+          if marker_start then
+            local marker_end = line:find("@@", marker_start + 2, true)
+            if marker_end then
+              add_hl(session.buf, "NeomagitHunkMarker", row, marker_start - 1, marker_end + 1)
+            end
+          end
+          add_hl(session.buf, "NeomagitHunk", row, meta.style == "magit" and 2 or 4, -1)
         end
-        add_hl(session.buf, "NeomagitHunk", row, meta.style == "magit" and 2 or 4, -1)
       elseif meta.kind == "hint" then
         add_hl(session.buf, "NeomagitHint", row, 0, -1)
       elseif meta.kind == "info" then
@@ -252,6 +269,13 @@ local function sorted_entries(entries)
   return list
 end
 
+local function hunk_line_type(line)
+  if not line or line == "" then
+    return " "
+  end
+  return line:sub(1, 1)
+end
+
 local function render_section_classic(session, lines, line_map, key, title, entries, hunk_map, sign)
   local folded = session.ui.folded[key]
   local icon = folded and "+" or "-"
@@ -281,6 +305,18 @@ local function render_section_classic(session, lines, line_map, key, title, entr
           hunk_index = idx,
           hunk = hunk,
         })
+        for line_idx = 2, #(hunk.lines or {}) do
+          local hline = hunk.lines[line_idx]
+          push(lines, line_map, string.format("      %s", hline), {
+            kind = "hunk",
+            section = key,
+            path = entry.path,
+            hunk_index = idx,
+            hunk = hunk,
+            hunk_line = line_idx,
+            hunk_line_type = hunk_line_type(hline),
+          })
+        end
       end
     end
   end
@@ -364,6 +400,19 @@ local function render_section_magit(session, lines, line_map, key, title, entrie
           hunk_index = idx,
           hunk = hunk,
         })
+        for line_idx = 2, #(hunk.lines or {}) do
+          local hline = hunk.lines[line_idx]
+          push(lines, line_map, string.format("    %s", hline), {
+            kind = "hunk",
+            style = "magit",
+            section = key,
+            path = entry.path,
+            hunk_index = idx,
+            hunk = hunk,
+            hunk_line = line_idx,
+            hunk_line_type = hunk_line_type(hline),
+          })
+        end
       end
     end
   end
