@@ -15,6 +15,10 @@ vim.api.nvim_create_user_command("NeomagitBranch", function()
   require("neomagit").run("branch", { open = true })
 end, {})
 
+vim.api.nvim_create_user_command("NeomagitRemote", function()
+  require("neomagit").run("remote", { open = true })
+end, {})
+
 vim.api.nvim_create_user_command("NeomagitStash", function()
   require("neomagit").run("stash", { open = true })
 end, {})

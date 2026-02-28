@@ -27,6 +27,9 @@ COMMANDS                                                     *neomagit-commands*
                                                         *:NeomagitBranch*
 :NeomagitBranch        Open branch popup.
 
+                                                        *:NeomagitRemote*
+:NeomagitRemote        Open remote popup (add/set-url/rename/remove/show).
+
                                                         *:NeomagitStash*
 :NeomagitStash         Open stash popup.
 
@@ -64,6 +67,7 @@ Status buffer:
   x                    Discard file/hunk
   c                    Commit popup
   b                    Branch popup
+  m                    Remote popup
   z                    Stash popup
   f                    Fetch popup
   p                    Push/pull popup
@@ -111,6 +115,7 @@ SETUP                                                             *neomagit-setu
 header lines and status-word file rows. Use `ui.style = "classic"` for the
 original layout.
 
+Remote popup supports add/set-url/rename/remove/show flows.
 Stash popup supports create/apply/pop/drop plus include-untracked/all,
 keep-index, branch-from-stash, patch preview, and clear-all flows.
 Fetch/push/pull popups support upstream-aware defaults, explicit remote+branch

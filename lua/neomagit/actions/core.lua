@@ -201,6 +201,26 @@ local function choose_remote(session, prompt, fallback_default, cb)
   end)
 end
 
+local function choose_existing_remote(session, prompt, cb)
+  list_remotes(session, function(remotes)
+    if #remotes == 0 then
+      notify("No remotes configured", vim.log.levels.WARN)
+      return
+    end
+
+    local items = {}
+    for _, remote in ipairs(remotes) do
+      table.insert(items, { label = remote, remote = remote })
+    end
+
+    transient.select(prompt or "Select remote:", items, function(choice)
+      if choice then
+        cb(choice.remote)
+      end
+    end)
+  end)
+end
+
 local function choose_remote_branch(session, remote, prompt, fallback_default, cb)
   list_remote_tracking_branches(session, remote, function(branches)
     if #branches == 0 then
@@ -523,6 +543,85 @@ function M.branch_popup()
           end)
         end
       end)
+    end)
+  end)
+end
+
+function M.remote_popup()
+  local session = current_session()
+  if not session then
+    return
+  end
+
+  transient.select("Remote action:", {
+    { label = "Add remote", action = "add" },
+    { label = "Set remote URL", action = "set_url" },
+    { label = "Rename remote", action = "rename" },
+    { label = "Remove remote", action = "remove" },
+    { label = "Show remotes", action = "show" },
+  }, function(choice)
+    if not choice then
+      return
+    end
+
+    if choice.action == "add" then
+      transient.input("Remote name: ", default_remote(session), function(name)
+        if not name or name == "" then
+          return
+        end
+        transient.input("Remote URL: ", "", function(url)
+          if not url or url == "" then
+            return
+          end
+          run_serial(session, { "remote", "add", name, url }, nil, "Added remote " .. name)
+        end)
+      end)
+      return
+    end
+
+    if choice.action == "show" then
+      runner.run(session.context, { "remote", "-v" }, nil, function(res)
+        if not res.ok then
+          local stderr = trim(res.stderr)
+          notify(stderr ~= "" and stderr or "Failed to list remotes", vim.log.levels.ERROR)
+          return
+        end
+        local lines = split_lines(res.stdout)
+        if #lines == 0 then
+          lines = { "(no remotes configured)" }
+        end
+        open_readonly_buffer("Neomagit://remotes", "gitconfig", lines)
+      end)
+      return
+    end
+
+    choose_existing_remote(session, "Select remote:", function(remote)
+      if choice.action == "set_url" then
+        runner.run(session.context, { "remote", "get-url", remote }, nil, function(res)
+          local current_url = ""
+          if res.ok then
+            current_url = trim(res.stdout)
+          end
+          transient.input("New URL for " .. remote .. ": ", current_url, function(url)
+            if not url or url == "" then
+              return
+            end
+            run_serial(session, { "remote", "set-url", remote, url }, nil, "Updated " .. remote .. " URL")
+          end)
+        end)
+      elseif choice.action == "rename" then
+        transient.input("Rename " .. remote .. " to: ", remote, function(new_name)
+          if not new_name or new_name == "" or new_name == remote then
+            return
+          end
+          run_serial(session, { "remote", "rename", remote, new_name }, nil, "Renamed remote to " .. new_name)
+        end)
+      elseif choice.action == "remove" then
+        if not require_confirm("Remove remote " .. remote .. "?") then
+          return
+        end
+        run_serial(session, { "remote", "remove", remote }, nil, "Removed remote " .. remote)
+      end
     end)
   end)
 end
@@ -1014,6 +1113,10 @@ end
 
 function M.open_branch_popup()
   M.branch_popup()
+end
+
+function M.open_remote_popup()
+  M.remote_popup()
 end
 
 function M.open_stash_popup()

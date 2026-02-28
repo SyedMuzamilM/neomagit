@@ -47,6 +47,7 @@ function M.run(action, opts)
     discard = actions.discard_from_cursor,
     commit = actions.commit_popup,
     branch = actions.branch_popup,
+    remote = actions.remote_popup,
     stash = actions.stash_popup,
     fetch = actions.fetch,
     push = actions.push,
