@@ -491,6 +491,18 @@ function M.commit_popup()
   end)
 end
 
+function M.commit_quick()
+  local session = current_session()
+  if not session then
+    return
+  end
+  transient.input("Commit message: ", "", function(msg)
+    if msg and msg ~= "" then
+      run_serial(session, { "commit", "-m", msg }, nil, "Commit created")
+    end
+  end)
+end
+
 function M.branch_popup()
   local session = current_session()
   if not session then
@@ -547,6 +559,24 @@ function M.branch_popup()
   end)
 end
 
+function M.add_remote_quick()
+  local session = current_session()
+  if not session then
+    return
+  end
+  transient.input("Remote name: ", default_remote(session), function(name)
+    if not name or name == "" then
+      return
+    end
+    transient.input("Remote URL: ", "", function(url)
+      if not url or url == "" then
+        return
+      end
+      run_serial(session, { "remote", "add", name, url }, nil, "Added remote " .. name)
+    end)
+  end)
+end
+
 function M.remote_popup()
   local session = current_session()
   if not session then
@@ -565,17 +595,7 @@ function M.remote_popup()
     end
 
     if choice.action == "add" then
-      transient.input("Remote name: ", default_remote(session), function(name)
-        if not name or name == "" then
-          return
-        end
-        transient.input("Remote URL: ", "", function(url)
-          if not url or url == "" then
-            return
-          end
-          run_serial(session, { "remote", "add", name, url }, nil, "Added remote " .. name)
-        end)
-      end)
+      M.add_remote_quick()
       return
     end
 

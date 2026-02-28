@@ -66,11 +66,15 @@ Status buffer:
   u                    Unstage file/hunk
   x                    Discard file/hunk
   c                    Commit popup
+  C                    Quick commit
   b                    Branch popup
   m                    Remote popup
+  O                    Quick add remote
   z                    Stash popup
   f                    Fetch popup
   p                    Push/pull popup
+  P                    Quick push
+  U                    Quick pull
   r                    Rebase popup
   A                    Cherry-pick popup
   v                    Revert popup
@@ -120,6 +124,8 @@ Stash popup supports create/apply/pop/drop plus include-untracked/all,
 keep-index, branch-from-stash, patch preview, and clear-all flows.
 Fetch/push/pull popups support upstream-aware defaults, explicit remote+branch
 selection, force-with-lease push, and rebase pull mode.
+Status also includes tracking sections using Magit-style wording:
+"Unpulled from <target>" and "Unmerged into <target>".
 
 ==============================================================================
 HIGHLIGHTS                                                   *neomagit-highlights*

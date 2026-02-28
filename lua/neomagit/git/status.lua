@@ -101,6 +101,45 @@ local function build_header(branch, results)
   return header
 end
 
+local function parse_oneline_result(result)
+  if not result or not result.ok then
+    return {}
+  end
+  return parsers.parse_oneline_log(result.stdout or "")
+end
+
+local function build_tracking_sections(branch, header, results)
+  local sections = {}
+  local merge_ref = trim(header and header.merge and header.merge.ref or "")
+  if merge_ref == "" then
+    merge_ref = trim(branch and branch.upstream or "")
+  end
+  local push_ref = trim(header and header.push and header.push.ref or "")
+
+  local function push_section(key, title, commits)
+    if #commits == 0 then
+      return
+    end
+    table.insert(sections, {
+      key = key,
+      title = title,
+      commits = commits,
+    })
+  end
+
+  if merge_ref ~= "" then
+    push_section("unpulled_upstream", "Unpulled from " .. merge_ref, parse_oneline_result(results.unpulled_upstream))
+    push_section("unmerged_upstream", "Unmerged into " .. merge_ref, parse_oneline_result(results.unmerged_upstream))
+  end
+
+  if push_ref ~= "" and push_ref ~= merge_ref then
+    push_section("unpulled_push", "Unpulled from " .. push_ref, parse_oneline_result(results.unpulled_push))
+    push_section("unmerged_push", "Unmerged into " .. push_ref, parse_oneline_result(results.unmerged_push))
+  end
+
+  return sections
+end
+
 function M.collect(context, cb)
   run_tasks(context, {
     status = { args = { "status", "--porcelain=v1", "--branch", "--untracked-files=all" } },
@@ -113,6 +152,10 @@ function M.collect(context, cb)
     head_short = { args = { "rev-parse", "--short", "HEAD" } },
     diff_unstaged = { args = { "diff", "--no-color", "--unified=0" } },
     diff_staged = { args = { "diff", "--cached", "--no-color", "--unified=0" } },
+    unpulled_upstream = { args = { "log", "--oneline", "..@{upstream}", "-n", "20" } },
+    unmerged_upstream = { args = { "log", "--oneline", "@{upstream}..", "-n", "20" } },
+    unpulled_push = { args = { "log", "--oneline", "..@{push}", "-n", "20" } },
+    unmerged_push = { args = { "log", "--oneline", "@{push}..", "-n", "20" } },
     stash_list = { args = { "stash", "list" } },
     log = { args = { "log", "--oneline", "-n", "20" } },
     worktrees = { args = { "worktree", "list", "--porcelain" } },
@@ -129,10 +172,12 @@ function M.collect(context, cb)
     local diff_staged = parsers.parse_unified_diff(results.diff_staged and results.diff_staged.stdout or "")
     local branch = parsed.branch or {}
     local header = build_header(branch, results)
+    local tracking = build_tracking_sections(branch, header, results)
 
     local snapshot = {
       branch = branch,
       header = header,
+      tracking = tracking,
       sections = parsed.sections,
       hunks = {
         unstaged = diff_unstaged,
@@ -151,5 +196,6 @@ function M.collect(context, cb)
 end
 
 M._build_header = build_header
+M._build_tracking_sections = build_tracking_sections
 
 return M

@@ -81,7 +81,46 @@ local function test_build_header_fallbacks()
   assert_eq(header.tag, nil, "no tag when describe fails")
 end
 
+local function test_build_tracking_sections()
+  local sections = status._build_tracking_sections({
+    upstream = "origin/main",
+  }, {
+    merge = { ref = "origin/main" },
+    push = { ref = "fork/main" },
+  }, {
+    unpulled_upstream = { ok = true, stdout = "a1b2c3d upstream behind\n" },
+    unmerged_upstream = { ok = true, stdout = "b2c3d4e local ahead\n" },
+    unpulled_push = { ok = true, stdout = "c3d4e5f push behind\n" },
+    unmerged_push = { ok = true, stdout = "d4e5f6a push ahead\n" },
+  })
+
+  assert_eq(#sections, 4, "tracking section count")
+  assert_eq(sections[1].title, "Unpulled from origin/main", "upstream unpulled title")
+  assert_eq(sections[2].title, "Unmerged into origin/main", "upstream unmerged title")
+  assert_eq(sections[3].title, "Unpulled from fork/main", "push unpulled title")
+  assert_eq(sections[4].title, "Unmerged into fork/main", "push unmerged title")
+  assert_eq(sections[1].commits[1].hash, "a1b2c3d", "first unpulled hash")
+end
+
+local function test_build_tracking_sections_dedup_push_remote()
+  local sections = status._build_tracking_sections({
+    upstream = "origin/main",
+  }, {
+    merge = { ref = "origin/main" },
+    push = { ref = "origin/main" },
+  }, {
+    unpulled_upstream = { ok = true, stdout = "a1b2c3d upstream behind\n" },
+    unmerged_upstream = { ok = true, stdout = "b2c3d4e local ahead\n" },
+    unpulled_push = { ok = true, stdout = "c3d4e5f push behind\n" },
+    unmerged_push = { ok = true, stdout = "d4e5f6a push ahead\n" },
+  })
+
+  assert_eq(#sections, 2, "push tracking deduped when same as upstream")
+end
+
 test_build_header_full()
 test_build_header_fallbacks()
+test_build_tracking_sections()
+test_build_tracking_sections_dedup_push_remote()
 
 print("status tests passed")

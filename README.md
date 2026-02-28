@@ -10,6 +10,7 @@ It provides a central status buffer with section-based Git workflows:
 - remote management (add/set-url/rename/remove/list)
 - stash flows (create/apply/pop/drop/clear, include-untracked/all, keep-index, branch-from-stash, show patch)
 - fetch/push/pull flows (upstream/push-target aware, remote+branch selection, force-with-lease, rebase pull mode, tags)
+- tracking sections (Unpulled from / Unmerged into for upstream and push-target)
 - rebase/cherry-pick/revert/reset
 - worktree/submodule visibility
 
@@ -84,11 +85,15 @@ In status buffer:
 - `u` unstage (file/hunk)
 - `x` discard (file/hunk for unstaged)
 - `c` commit popup
+- `C` quick commit
 - `b` branch popup
 - `m` remote popup
+- `O` quick add remote
 - `z` stash popup
 - `f` fetch popup
 - `p` push/pull popup
+- `P` quick push
+- `U` quick pull
 - `r` rebase popup
 - `A` cherry-pick popup
 - `v` revert popup

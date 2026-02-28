@@ -332,6 +332,19 @@ local function render_header_classic(session, lines, line_map, key, title, count
   return folded
 end
 
+local function render_commit_section_classic(session, lines, line_map, key, title, commits)
+  if render_header_classic(session, lines, line_map, key, title, #(commits or {})) then
+    return
+  end
+  for idx, c in ipairs(commits or {}) do
+    push(lines, line_map, string.format("  %d. %s %s", idx, c.hash, c.subject), {
+      kind = "commit",
+      commit = c,
+      index = idx,
+    })
+  end
+end
+
 local status_words = {
   M = "modified",
   A = "new file",
@@ -420,6 +433,19 @@ end
 
 local function render_header_magit(session, lines, line_map, key, title, count)
   return render_section_header_magit(session, lines, line_map, key, title, count)
+end
+
+local function render_commit_section_magit(session, lines, line_map, key, title, commits)
+  if render_header_magit(session, lines, line_map, key, title, #(commits or {})) then
+    return
+  end
+  for idx, c in ipairs(commits or {}) do
+    push(lines, line_map, string.format("  %d. %s %s", idx, c.hash, c.subject), {
+      kind = "commit",
+      commit = c,
+      index = idx,
+    })
+  end
 end
 
 local function push_header_line(lines, line_map, label, ref, subject, sep)
@@ -511,6 +537,10 @@ end
 
 local function render_tail_sections_classic(session, lines, line_map, snapshot)
   push(lines, line_map, "", { kind = "blank" })
+  for _, tracking in ipairs(snapshot.tracking or {}) do
+    render_commit_section_classic(session, lines, line_map, tracking.key, tracking.title, tracking.commits)
+  end
+
   if not render_header_classic(session, lines, line_map, "stashes", "Stashes", #(snapshot.stashes or {})) then
     for idx, stash in ipairs(snapshot.stashes or {}) do
       push(lines, line_map, string.format("  %d. %s %s", idx, stash.ref, stash.subject), {
@@ -521,15 +551,7 @@ local function render_tail_sections_classic(session, lines, line_map, snapshot)
     end
   end
 
-  if not render_header_classic(session, lines, line_map, "recent", "Recent Commits", #(snapshot.recent or {})) then
-    for idx, c in ipairs(snapshot.recent or {}) do
-      push(lines, line_map, string.format("  %d. %s %s", idx, c.hash, c.subject), {
-        kind = "commit",
-        commit = c,
-        index = idx,
-      })
-    end
-  end
+  render_commit_section_classic(session, lines, line_map, "recent", "Recent Commits", snapshot.recent or {})
 
   if not render_header_classic(session, lines, line_map, "worktrees", "Worktrees", #(snapshot.worktrees or {})) then
     for idx, wt in ipairs(snapshot.worktrees or {}) do
@@ -554,6 +576,10 @@ end
 
 local function render_tail_sections_magit(session, lines, line_map, snapshot)
   push(lines, line_map, "", { kind = "blank" })
+  for _, tracking in ipairs(snapshot.tracking or {}) do
+    render_commit_section_magit(session, lines, line_map, tracking.key, tracking.title, tracking.commits)
+  end
+
   if not render_header_magit(session, lines, line_map, "stashes", "Stashes", #(snapshot.stashes or {})) then
     for idx, stash in ipairs(snapshot.stashes or {}) do
       push(lines, line_map, string.format("  %d. %s %s", idx, stash.ref, stash.subject), {
@@ -564,15 +590,7 @@ local function render_tail_sections_magit(session, lines, line_map, snapshot)
     end
   end
 
-  if not render_header_magit(session, lines, line_map, "recent", "Recent commits", #(snapshot.recent or {})) then
-    for idx, c in ipairs(snapshot.recent or {}) do
-      push(lines, line_map, string.format("  %d. %s %s", idx, c.hash, c.subject), {
-        kind = "commit",
-        commit = c,
-        index = idx,
-      })
-    end
-  end
+  render_commit_section_magit(session, lines, line_map, "recent", "Recent commits", snapshot.recent or {})
 
   if not render_header_magit(session, lines, line_map, "worktrees", "Worktrees", #(snapshot.worktrees or {})) then
     for idx, wt in ipairs(snapshot.worktrees or {}) do
@@ -601,8 +619,10 @@ local function render_help(lines, line_map, help_open)
   if help_open then
     push(lines, line_map, "q close  g refresh  <Tab> fold/unfold  ? toggle help", { kind = "help" })
     push(lines, line_map, "s stage  u unstage  x discard", { kind = "help" })
-    push(lines, line_map, "c commit  b branch  m remote  z stash", { kind = "help" })
-    push(lines, line_map, "f fetch popup  p push/pull popup", { kind = "help" })
+    push(lines, line_map, "c commit popup  C quick commit", { kind = "help" })
+    push(lines, line_map, "b branch  m remote popup  O quick remote add", { kind = "help" })
+    push(lines, line_map, "z stash  f fetch popup  p push/pull popup", { kind = "help" })
+    push(lines, line_map, "P quick push  U quick pull", { kind = "help" })
     push(lines, line_map, "r rebase  A cherry-pick  v revert  R reset", { kind = "help" })
     push(lines, line_map, "l open full log", { kind = "help" })
   end
@@ -807,12 +827,18 @@ local function attach_keymaps(buf)
   map("c", function()
     require("neomagit.actions.core").commit_popup()
   end, "Commit popup")
+  map("C", function()
+    require("neomagit.actions.core").commit_quick()
+  end, "Quick commit")
   map("b", function()
     require("neomagit.actions.core").branch_popup()
   end, "Branch popup")
   map("m", function()
     require("neomagit.actions.core").remote_popup()
   end, "Remote popup")
+  map("O", function()
+    require("neomagit.actions.core").add_remote_quick()
+  end, "Quick add remote")
   map("z", function()
     require("neomagit.actions.core").stash_popup()
   end, "Stash popup")
@@ -822,6 +848,12 @@ local function attach_keymaps(buf)
   map("p", function()
     require("neomagit.actions.core").push_pull_popup()
   end, "Push/Pull popup")
+  map("P", function()
+    require("neomagit.actions.core").push()
+  end, "Quick push")
+  map("U", function()
+    require("neomagit.actions.core").pull()
+  end, "Quick pull")
   map("r", function()
     require("neomagit.actions.core").rebase_popup()
   end, "Rebase popup")
