@@ -6,8 +6,9 @@ It provides a central status buffer with section-based Git workflows:
 
 - stage/unstage/discard (file and hunk)
 - commit/amend/fixup/squash
-- branch and stash flows
-- fetch/push/pull
+- branch flows
+- stash flows (create/apply/pop/drop/clear, include-untracked/all, keep-index, branch-from-stash, show patch)
+- fetch/push/pull flows (upstream/push-target aware, remote+branch selection, force-with-lease, rebase pull mode, tags)
 - rebase/cherry-pick/revert/reset
 - worktree/submodule visibility
 
@@ -58,6 +59,9 @@ use({
 - `:NeomagitLog`
 - `:NeomagitBranch`
 - `:NeomagitStash`
+- `:NeomagitFetch`
+- `:NeomagitPull`
+- `:NeomagitPush`
 - `:NeomagitRebase`
 - `:NeomagitCherryPick`
 - `:NeomagitRefresh`
@@ -80,7 +84,7 @@ In status buffer:
 - `c` commit popup
 - `b` branch popup
 - `z` stash popup
-- `f` fetch
+- `f` fetch popup
 - `p` push/pull popup
 - `r` rebase popup
 - `A` cherry-pick popup

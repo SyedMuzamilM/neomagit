@@ -94,7 +94,7 @@ local function choose_commit(session, prompt, cb)
   end)
 end
 
-local function list_branches(session, cb)
+local function list_local_branches(session, cb)
   runner.run(session.context, { "branch", "--format=%(refname:short)" }, nil, function(res)
     if not res.ok then
       notify(trim(res.stderr), vim.log.levels.ERROR)
@@ -104,8 +104,200 @@ local function list_branches(session, cb)
     for _, line in ipairs(split_lines(res.stdout)) do
       table.insert(branches, line)
     end
+    table.sort(branches)
     cb(branches)
   end)
+end
+
+local function list_remotes(session, cb)
+  runner.run(session.context, { "remote" }, nil, function(res)
+    if not res.ok then
+      notify(trim(res.stderr), vim.log.levels.ERROR)
+      return
+    end
+    local remotes = split_lines(res.stdout)
+    table.sort(remotes)
+    cb(remotes)
+  end)
+end
+
+local function list_remote_tracking_branches(session, remote, cb)
+  runner.run(session.context, { "branch", "-r", "--format=%(refname:short)" }, nil, function(res)
+    if not res.ok then
+      notify(trim(res.stderr), vim.log.levels.ERROR)
+      return
+    end
+
+    local out = {}
+    local prefix = remote .. "/"
+    for _, ref in ipairs(split_lines(res.stdout)) do
+      if ref:sub(1, #prefix) == prefix and not ref:match("/HEAD$") then
+        table.insert(out, ref:sub(#prefix + 1))
+      end
+    end
+    table.sort(out)
+    cb(out)
+  end)
+end
+
+local function parse_remote_branch(ref)
+  local normalized = trim(ref or ""):gsub("^refs/remotes/", "")
+  if normalized == "" then
+    return nil, nil
+  end
+  return normalized:match("^([^/]+)/(.+)$")
+end
+
+local function current_branch(session)
+  local branch = session.snapshot and session.snapshot.branch or {}
+  return branch.head or "HEAD"
+end
+
+local function default_remote(session)
+  local branch = session.snapshot and session.snapshot.branch or {}
+  local upstream_remote = parse_remote_branch(branch.upstream)
+  if upstream_remote then
+    return upstream_remote
+  end
+  local push_ref = session.snapshot and session.snapshot.header and session.snapshot.header.push and session.snapshot.header.push.ref
+  local push_remote = parse_remote_branch(push_ref)
+  if push_remote then
+    return push_remote
+  end
+  return "origin"
+end
+
+local function choose_remote(session, prompt, fallback_default, cb)
+  list_remotes(session, function(remotes)
+    if #remotes == 0 then
+      transient.input(prompt or "Remote: ", fallback_default or "origin", function(remote)
+        if remote and remote ~= "" then
+          cb(remote)
+        end
+      end)
+      return
+    end
+
+    local items = {}
+    for _, remote in ipairs(remotes) do
+      table.insert(items, { label = remote, remote = remote })
+    end
+    table.insert(items, { label = "Enter remote manually", manual = true })
+
+    transient.select(prompt or "Select remote:", items, function(choice)
+      if not choice then
+        return
+      end
+      if choice.manual then
+        transient.input("Remote name: ", fallback_default or remotes[1] or "origin", function(remote)
+          if remote and remote ~= "" then
+            cb(remote)
+          end
+        end)
+        return
+      end
+      cb(choice.remote)
+    end)
+  end)
+end
+
+local function choose_remote_branch(session, remote, prompt, fallback_default, cb)
+  list_remote_tracking_branches(session, remote, function(branches)
+    if #branches == 0 then
+      transient.input(prompt or ("Remote branch on " .. remote .. ": "), fallback_default or current_branch(session), function(name)
+        if name and name ~= "" then
+          cb(name)
+        end
+      end)
+      return
+    end
+
+    local items = {}
+    for _, name in ipairs(branches) do
+      table.insert(items, { label = name, branch = name })
+    end
+    table.insert(items, { label = "Enter branch manually", manual = true })
+
+    transient.select(prompt or ("Select branch on " .. remote .. ":"), items, function(choice)
+      if not choice then
+        return
+      end
+      if choice.manual then
+        transient.input("Branch name: ", fallback_default or current_branch(session), function(name)
+          if name and name ~= "" then
+            cb(name)
+          end
+        end)
+        return
+      end
+      cb(choice.branch)
+    end)
+  end)
+end
+
+local function stash_under_cursor(session)
+  local meta = ui.cursor_meta(session)
+  if meta and meta.kind == "stash" and meta.stash then
+    return meta.stash
+  end
+  return nil
+end
+
+local function choose_stash(session, prompt, cb)
+  local stashes = (session.snapshot and session.snapshot.stashes) or {}
+  if #stashes == 0 then
+    notify("No stashes available", vim.log.levels.WARN)
+    return
+  end
+
+  local current = stash_under_cursor(session)
+  local items = {}
+
+  if current then
+    table.insert(items, {
+      label = "At cursor: " .. current.ref .. " " .. (current.subject or ""),
+      stash = current,
+    })
+  end
+
+  for _, stash in ipairs(stashes) do
+    if not current or current.ref ~= stash.ref then
+      table.insert(items, { label = stash.ref .. " " .. stash.subject, stash = stash })
+    end
+  end
+  table.insert(items, { label = "Enter stash ref manually", manual = true })
+
+  transient.select(prompt or "Choose stash:", items, function(choice)
+    if not choice then
+      return
+    end
+    if choice.manual then
+      transient.input("Stash ref: ", "stash@{0}", function(ref)
+        if ref and ref ~= "" then
+          cb({ ref = ref, subject = "" })
+        end
+      end)
+      return
+    end
+    cb(choice.stash)
+  end)
+end
+
+local function open_readonly_buffer(name, filetype, lines)
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile = false
+  if filetype and filetype ~= "" then
+    vim.bo[buf].filetype = filetype
+  end
+  pcall(vim.api.nvim_buf_set_name, buf, name)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines or {})
+  vim.api.nvim_set_current_buf(buf)
+  vim.keymap.set("n", "q", function()
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end, { buffer = buf, silent = true, desc = "Close buffer" })
+  return buf
 end
 
 local function extract_cursor_target()
@@ -306,7 +498,7 @@ function M.branch_popup()
       return
     end
 
-    list_branches(session, function(branches)
+    list_local_branches(session, function(branches)
       if #branches == 0 then
         notify("No branches found", vim.log.levels.WARN)
         return
@@ -342,9 +534,15 @@ function M.stash_popup()
   end
   local items = {
     { label = "Create stash", action = "create" },
+    { label = "Create stash (include untracked)", action = "create_untracked" },
+    { label = "Create stash (include ignored)", action = "create_all" },
+    { label = "Create stash (keep index)", action = "create_keep_index" },
     { label = "Apply stash", action = "apply" },
     { label = "Pop stash", action = "pop" },
+    { label = "Branch from stash", action = "branch" },
+    { label = "Show stash patch", action = "show" },
     { label = "Drop stash", action = "drop" },
+    { label = "Clear all stashes", action = "clear" },
   }
 
   transient.select("Stash action:", items, function(choice)
@@ -352,9 +550,22 @@ function M.stash_popup()
       return
     end
 
-    if choice.action == "create" then
+    if choice.action == "create"
+        or choice.action == "create_untracked"
+        or choice.action == "create_all"
+        or choice.action == "create_keep_index" then
+      local extra = {}
+      if choice.action == "create_untracked" then
+        extra = { "-u" }
+      elseif choice.action == "create_all" then
+        extra = { "-a" }
+      elseif choice.action == "create_keep_index" then
+        extra = { "--keep-index" }
+      end
+
       transient.input("Stash message (optional): ", "", function(message)
         local args = { "stash", "push" }
+        vim.list_extend(args, extra)
         if message and message ~= "" then
           table.insert(args, "-m")
           table.insert(args, message)
@@ -364,26 +575,53 @@ function M.stash_popup()
       return
     end
 
-    local stashes = (session.snapshot and session.snapshot.stashes) or {}
-    if #stashes == 0 then
-      notify("No stashes available", vim.log.levels.WARN)
+    if choice.action == "clear" then
+      if not require_confirm("Clear all stashes? This cannot be undone.") then
+        return
+      end
+      run_serial(session, { "stash", "clear" }, nil, "Cleared all stashes")
       return
     end
 
-    local items = {}
-    for _, stash in ipairs(stashes) do
-      table.insert(items, { label = stash.ref .. " " .. stash.subject, stash = stash })
-    end
-
-    transient.select("Choose stash:", items, function(selected)
-      if not selected then
+    choose_stash(session, "Choose stash:", function(stash)
+      if choice.action == "apply" or choice.action == "pop" then
+        transient.select("Restore index state as well?", {
+          { label = "No (working tree only)", with_index = false },
+          { label = "Yes (--index)", with_index = true },
+        }, function(index_choice)
+          if not index_choice then
+            return
+          end
+          local args = { "stash", choice.action, stash.ref }
+          if index_choice.with_index then
+            table.insert(args, 3, "--index")
+          end
+          local verb = choice.action == "pop" and "Popped " or "Applied "
+          run_serial(session, args, nil, verb .. stash.ref)
+        end)
         return
-      end
-      local stash = selected.stash
-      if choice.action == "apply" then
-        run_serial(session, { "stash", "apply", stash.ref }, nil, "Applied " .. stash.ref)
-      elseif choice.action == "pop" then
-        run_serial(session, { "stash", "pop", stash.ref }, nil, "Popped " .. stash.ref)
+      elseif choice.action == "branch" then
+        local default_name = current_branch(session) .. "-stash"
+        transient.input("Branch name for " .. stash.ref .. ": ", default_name, function(name)
+          if name and name ~= "" then
+            run_serial(session, { "stash", "branch", name, stash.ref }, nil, "Created branch " .. name .. " from " .. stash.ref)
+          end
+        end)
+        return
+      elseif choice.action == "show" then
+        runner.run(session.context, { "stash", "show", "-p", stash.ref }, nil, function(res)
+          if not res.ok then
+            local stderr = trim(res.stderr)
+            notify(stderr ~= "" and stderr or ("Failed to show " .. stash.ref), vim.log.levels.ERROR)
+            return
+          end
+          local lines = split_lines(res.stdout)
+          if #lines == 0 then
+            lines = { "(empty stash patch)" }
+          end
+          open_readonly_buffer("Neomagit://stash/" .. stash.ref, "diff", lines)
+        end)
+        return
       elseif choice.action == "drop" then
         if not require_confirm("Drop " .. stash.ref .. "?") then
           return
@@ -399,42 +637,230 @@ function M.fetch()
   if not session then
     return
   end
-  run_serial(session, { "fetch", "--all", "--prune" }, nil, "Fetched remotes")
-end
 
-local function do_push(session)
-  local branch = session.snapshot and session.snapshot.branch or {}
-  if branch.upstream and branch.upstream ~= "" then
-    run_serial(session, { "push" }, nil, "Push complete")
-    return
-  end
-
-  transient.input("Remote for upstream push: ", "origin", function(remote)
-    if not remote or remote == "" then
+  transient.select("Fetch action:", {
+    { label = "Fetch all remotes (--all --prune)", action = "all" },
+    { label = "Fetch upstream remote (--prune)", action = "upstream" },
+    { label = "Fetch selected remote (--prune)", action = "remote" },
+    { label = "Fetch selected remote branch", action = "branch" },
+    { label = "Fetch tags", action = "tags" },
+  }, function(choice)
+    if not choice then
       return
     end
-    local head = branch.head or "HEAD"
-    run_serial(session, { "push", "-u", remote, head }, nil, "Push complete")
+
+    if choice.action == "all" then
+      run_serial(session, { "fetch", "--all", "--prune" }, nil, "Fetched all remotes")
+      return
+    end
+
+    if choice.action == "tags" then
+      run_serial(session, { "fetch", "--tags", "--prune" }, nil, "Fetched tags")
+      return
+    end
+
+    if choice.action == "upstream" then
+      local upstream = session.snapshot and session.snapshot.branch and session.snapshot.branch.upstream
+      local remote = parse_remote_branch(upstream)
+      if not remote then
+        notify("No upstream remote configured", vim.log.levels.WARN)
+        return
+      end
+      run_serial(session, { "fetch", "--prune", remote }, nil, "Fetched " .. remote)
+      return
+    end
+
+    choose_remote(session, "Fetch from remote:", default_remote(session), function(remote)
+      if choice.action == "remote" then
+        run_serial(session, { "fetch", "--prune", remote }, nil, "Fetched " .. remote)
+        return
+      end
+
+      choose_remote_branch(session, remote, "Fetch branch from " .. remote .. ":", current_branch(session), function(branch)
+        run_serial(session, { "fetch", "--prune", remote, branch }, nil, "Fetched " .. remote .. "/" .. branch)
+      end)
+    end)
   end)
 end
 
-local function do_pull(session)
+local function run_push(session, remote, refspec, opts)
+  opts = opts or {}
+  local args = { "push" }
+  if opts.force_with_lease then
+    table.insert(args, "--force-with-lease")
+  end
+  if opts.set_upstream then
+    table.insert(args, "-u")
+  end
+  if opts.tags then
+    table.insert(args, "--tags")
+  end
+  if remote and remote ~= "" then
+    table.insert(args, remote)
+  end
+  if refspec and refspec ~= "" then
+    table.insert(args, refspec)
+  end
+  run_serial(session, args, nil, "Push complete")
+end
+
+local function push_with_configured_target(session, opts)
   local branch = session.snapshot and session.snapshot.branch or {}
   if branch.upstream and branch.upstream ~= "" then
-    run_serial(session, { "pull", "--ff-only" }, nil, "Pull complete")
+    run_push(session, nil, nil, opts)
+    return true
+  end
+
+  local push_ref = session.snapshot and session.snapshot.header and session.snapshot.header.push and session.snapshot.header.push.ref
+  local remote, remote_branch = parse_remote_branch(push_ref)
+  if remote and remote_branch then
+    local local_branch = current_branch(session)
+    local refspec = local_branch
+    if local_branch ~= "HEAD" and remote_branch ~= local_branch then
+      refspec = local_branch .. ":" .. remote_branch
+    end
+    run_push(session, remote, refspec, opts)
+    return true
+  end
+
+  return false
+end
+
+local function prompt_push_target(session, opts)
+  choose_remote(session, "Push to remote:", default_remote(session), function(remote)
+    choose_remote_branch(session, remote, "Remote branch on " .. remote .. ":", current_branch(session), function(remote_branch)
+      local local_branch = current_branch(session)
+      local refspec = local_branch
+      if local_branch ~= "HEAD" and remote_branch ~= local_branch then
+        refspec = local_branch .. ":" .. remote_branch
+      end
+      run_push(session, remote, refspec, opts)
+    end)
+  end)
+end
+
+function M.push()
+  local session = current_session()
+  if not session then
     return
   end
 
-  transient.input("Remote: ", "origin", function(remote)
-    if not remote or remote == "" then
+  if push_with_configured_target(session) then
+    return
+  end
+  prompt_push_target(session, { set_upstream = true })
+end
+
+local function push_popup(session)
+  transient.select("Push action:", {
+    { label = "Push to configured target", action = "default" },
+    { label = "Push to selected target", action = "target" },
+    { label = "Push and set upstream", action = "set_upstream" },
+    { label = "Force push with lease", action = "force_with_lease" },
+    { label = "Push tags", action = "tags" },
+  }, function(choice)
+    if not choice then
       return
     end
-    transient.input("Branch: ", branch.head or "main", function(name)
-      if not name or name == "" then
+
+    if choice.action == "default" then
+      if not push_with_configured_target(session) then
+        prompt_push_target(session, { set_upstream = true })
+      end
+      return
+    end
+
+    if choice.action == "tags" then
+      run_push(session, nil, nil, { tags = true })
+      return
+    end
+
+    if choice.action == "force_with_lease" then
+      if push_with_configured_target(session, { force_with_lease = true }) then
         return
       end
-      run_serial(session, { "pull", "--ff-only", remote, name }, nil, "Pull complete")
+      prompt_push_target(session, { set_upstream = true, force_with_lease = true })
+      return
+    end
+
+    prompt_push_target(session, { set_upstream = choice.action == "set_upstream" })
+  end)
+end
+
+local function run_pull(session, mode, remote, branch)
+  local args = { "pull" }
+  if mode == "ff_only" then
+    table.insert(args, "--ff-only")
+  elseif mode == "rebase" then
+    table.insert(args, "--rebase")
+  elseif mode == "merge" then
+    table.insert(args, "--no-rebase")
+  end
+  if remote and remote ~= "" then
+    table.insert(args, remote)
+  end
+  if branch and branch ~= "" then
+    table.insert(args, branch)
+  end
+  run_serial(session, args, nil, "Pull complete")
+end
+
+local function pull_from_upstream(session, mode)
+  local branch = session.snapshot and session.snapshot.branch or {}
+  if branch.upstream and branch.upstream ~= "" then
+    run_pull(session, mode)
+    return true
+  end
+  return false
+end
+
+local function pull_from_remote_target(session, mode)
+  choose_remote(session, "Pull from remote:", default_remote(session), function(remote)
+    choose_remote_branch(session, remote, "Branch on " .. remote .. ":", current_branch(session), function(name)
+      run_pull(session, mode, remote, name)
     end)
+  end)
+end
+
+function M.pull()
+  local session = current_session()
+  if not session then
+    return
+  end
+  if not pull_from_upstream(session, "ff_only") then
+    pull_from_remote_target(session, "ff_only")
+  end
+end
+
+local function pull_popup(session)
+  transient.select("Pull action:", {
+    { label = "Pull from upstream (fast-forward only)", action = "upstream_ff" },
+    { label = "Pull from upstream (rebase)", action = "upstream_rebase" },
+    { label = "Pull from upstream (merge commit allowed)", action = "upstream_merge" },
+    { label = "Pull from selected target (fast-forward only)", action = "target_ff" },
+    { label = "Pull from selected target (rebase)", action = "target_rebase" },
+  }, function(choice)
+    if not choice then
+      return
+    end
+
+    if choice.action == "upstream_ff" then
+      if not pull_from_upstream(session, "ff_only") then
+        notify("No upstream configured; choose a remote target instead", vim.log.levels.WARN)
+      end
+    elseif choice.action == "upstream_rebase" then
+      if not pull_from_upstream(session, "rebase") then
+        notify("No upstream configured; choose a remote target instead", vim.log.levels.WARN)
+      end
+    elseif choice.action == "upstream_merge" then
+      if not pull_from_upstream(session, "merge") then
+        notify("No upstream configured; choose a remote target instead", vim.log.levels.WARN)
+      end
+    elseif choice.action == "target_ff" then
+      pull_from_remote_target(session, "ff_only")
+    else
+      pull_from_remote_target(session, "rebase")
+    end
   end)
 end
 
@@ -452,9 +878,9 @@ function M.push_pull_popup()
       return
     end
     if choice.action == "push" then
-      do_push(session)
+      push_popup(session)
     else
-      do_pull(session)
+      pull_popup(session)
     end
   end)
 end
@@ -581,18 +1007,8 @@ function M.show_log()
       notify(trim(res.stderr), vim.log.levels.ERROR)
       return
     end
-    local buf = vim.api.nvim_create_buf(false, true)
-    vim.bo[buf].buftype = "nofile"
-    vim.bo[buf].bufhidden = "wipe"
-    vim.bo[buf].swapfile = false
-    vim.bo[buf].filetype = "git"
-    pcall(vim.api.nvim_buf_set_name, buf, "Neomagit://log")
     local lines = split_lines(res.stdout)
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.api.nvim_set_current_buf(buf)
-    vim.keymap.set("n", "q", function()
-      vim.api.nvim_buf_delete(buf, { force = true })
-    end, { buffer = buf, silent = true, desc = "Close log" })
+    open_readonly_buffer("Neomagit://log", "git", lines)
   end)
 end
 

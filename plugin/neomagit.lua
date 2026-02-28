@@ -19,6 +19,18 @@ vim.api.nvim_create_user_command("NeomagitStash", function()
   require("neomagit").run("stash", { open = true })
 end, {})
 
+vim.api.nvim_create_user_command("NeomagitFetch", function()
+  require("neomagit").run("fetch", { open = true })
+end, {})
+
+vim.api.nvim_create_user_command("NeomagitPull", function()
+  require("neomagit").run("pull", { open = true })
+end, {})
+
+vim.api.nvim_create_user_command("NeomagitPush", function()
+  require("neomagit").run("push", { open = true })
+end, {})
+
 vim.api.nvim_create_user_command("NeomagitRebase", function()
   require("neomagit").run("rebase", { open = true })
 end, {})

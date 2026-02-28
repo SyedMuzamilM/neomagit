@@ -30,6 +30,15 @@ COMMANDS                                                     *neomagit-commands*
                                                         *:NeomagitStash*
 :NeomagitStash         Open stash popup.
 
+                                                        *:NeomagitFetch*
+:NeomagitFetch         Open fetch popup.
+
+                                                        *:NeomagitPull*
+:NeomagitPull          Pull from upstream (or choose remote target).
+
+                                                        *:NeomagitPush*
+:NeomagitPush          Push to configured target (or choose/set upstream).
+
                                                         *:NeomagitRebase*
 :NeomagitRebase        Open rebase popup.
 
@@ -56,7 +65,7 @@ Status buffer:
   c                    Commit popup
   b                    Branch popup
   z                    Stash popup
-  f                    Fetch
+  f                    Fetch popup
   p                    Push/pull popup
   r                    Rebase popup
   A                    Cherry-pick popup
@@ -101,6 +110,11 @@ SETUP                                                             *neomagit-setu
 `ui.style = "magit"` renders a Magit-like status layout with Head/Merge/Push/Tag
 header lines and status-word file rows. Use `ui.style = "classic"` for the
 original layout.
+
+Stash popup supports create/apply/pop/drop plus include-untracked/all,
+keep-index, branch-from-stash, patch preview, and clear-all flows.
+Fetch/push/pull popups support upstream-aware defaults, explicit remote+branch
+selection, force-with-lease push, and rebase pull mode.
 
 ==============================================================================
 HIGHLIGHTS                                                   *neomagit-highlights*

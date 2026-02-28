@@ -49,6 +49,8 @@ function M.run(action, opts)
     branch = actions.branch_popup,
     stash = actions.stash_popup,
     fetch = actions.fetch,
+    push = actions.push,
+    pull = actions.pull,
     pushpull = actions.push_pull_popup,
     rebase = actions.rebase_popup,
     cherry_pick = actions.cherry_pick_popup,
