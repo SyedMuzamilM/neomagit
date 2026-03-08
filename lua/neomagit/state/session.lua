@@ -29,6 +29,10 @@ local function new_session(context)
         submodules = true,
       },
       help_open = false,
+      auto_refresh = {
+        running = false,
+        last_ns = 0,
+      },
     },
   }
 end

@@ -18,6 +18,14 @@ if not _G.vim then
 
   _G.vim = {
     deepcopy = deepcopy,
+    api = {
+      nvim_buf_is_valid = function(buf)
+        return type(buf) == "number" and buf > 0
+      end,
+      nvim_create_namespace = function()
+        return 1
+      end,
+    },
     loop = {
       cwd = function()
         return "."
@@ -26,10 +34,18 @@ if not _G.vim then
         return nil
       end,
     },
+    log = {
+      levels = {
+        INFO = 1,
+        WARN = 2,
+        ERROR = 3,
+      },
+    },
   }
 end
 
 local status = require("neomagit.git.status")
+local ui_status = require("neomagit.ui.status")
 
 local function assert_eq(actual, expected, message)
   if actual ~= expected then
@@ -118,9 +134,47 @@ local function test_build_tracking_sections_dedup_push_remote()
   assert_eq(#sections, 2, "push tracking deduped when same as upstream")
 end
 
+local function test_should_auto_refresh_only_active_valid_status_buffer()
+  local session = {
+    buf = 5,
+    ui = {
+      auto_refresh = {
+        running = false,
+        last_ns = 0,
+      },
+    },
+  }
+
+  assert_eq(ui_status._should_auto_refresh(session, 5, 1), true, "refreshes active neomagit buffer")
+  assert_eq(ui_status._should_auto_refresh(session, 6, 1), false, "skips other buffers")
+  assert_eq(ui_status._should_auto_refresh(nil, 5, 1), false, "skips missing session")
+  assert_eq(ui_status._should_auto_refresh({ buf = -1, ui = session.ui }, -1, 1), false, "skips invalid buffers")
+end
+
+local function test_should_auto_refresh_debounces_while_running_or_recent()
+  local session = {
+    buf = 7,
+    ui = {
+      auto_refresh = {
+        running = true,
+        last_ns = 0,
+      },
+    },
+  }
+
+  assert_eq(ui_status._should_auto_refresh(session, 7, 1), false, "skips while refresh is running")
+
+  session.ui.auto_refresh.running = false
+  session.ui.auto_refresh.last_ns = 100
+  assert_eq(ui_status._should_auto_refresh(session, 7, 100 + 50 * 1000 * 1000), false, "skips within debounce window")
+  assert_eq(ui_status._should_auto_refresh(session, 7, 100 + 200 * 1000 * 1000), true, "allows refresh after debounce")
+end
+
 test_build_header_full()
 test_build_header_fallbacks()
 test_build_tracking_sections()
 test_build_tracking_sections_dedup_push_remote()
+test_should_auto_refresh_only_active_valid_status_buffer()
+test_should_auto_refresh_debounces_while_running_or_recent()
 
 print("status tests passed")

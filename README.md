@@ -177,3 +177,4 @@ You can override these in your colorscheme or config:
 - All Git operations run through async CLI jobs.
 - Actions are queued per repository to reduce race conditions.
 - Worktree and submodule summaries are shown in status.
+- The status buffer auto-refreshes when you re-enter it or refocus Neovim, so new/untracked and deleted files stay in sync with the worktree.

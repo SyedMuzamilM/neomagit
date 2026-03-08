@@ -126,6 +126,8 @@ Fetch/push/pull popups support upstream-aware defaults, explicit remote+branch
 selection, force-with-lease push, and rebase pull mode.
 Status also includes tracking sections using Magit-style wording:
 "Unpulled from <target>" and "Unmerged into <target>".
+The status buffer auto-refreshes when you re-enter it or refocus Neovim so
+new/untracked and deleted files stay in sync with the worktree.
 
 ==============================================================================
 HIGHLIGHTS                                                   *neomagit-highlights*

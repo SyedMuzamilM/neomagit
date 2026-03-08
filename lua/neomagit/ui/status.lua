@@ -5,6 +5,8 @@ local M = {}
 local ns = vim.api.nvim_create_namespace("neomagit_status")
 local highlights_defined = false
 local colorscheme_autocmd_set = false
+local auto_refresh_autocmd_set = false
+local AUTO_REFRESH_DEBOUNCE_NS = 150 * 1000 * 1000
 
 local function ensure_highlights()
   if highlights_defined then
@@ -91,6 +93,83 @@ end
 
 local function notify(msg, level)
   vim.notify("[neomagit] " .. msg, level or vim.log.levels.INFO)
+end
+
+local function now_ns()
+  if vim.loop and vim.loop.hrtime then
+    return vim.loop.hrtime()
+  end
+  return 0
+end
+
+local function should_auto_refresh(session, current_buf, timestamp_ns)
+  if not session or not session.buf or session.buf ~= current_buf then
+    return false
+  end
+  if not vim.api.nvim_buf_is_valid(session.buf) then
+    return false
+  end
+
+  local state = session.ui and session.ui.auto_refresh
+  if not state or state.running then
+    return false
+  end
+
+  local last_ns = tonumber(state.last_ns or 0) or 0
+  local current_ns = tonumber(timestamp_ns or 0) or 0
+  if current_ns > 0 and last_ns > 0 and current_ns - last_ns < AUTO_REFRESH_DEBOUNCE_NS then
+    return false
+  end
+
+  return true
+end
+
+local function auto_refresh(session)
+  local current_buf = vim.api.nvim_get_current_buf()
+  local timestamp_ns = now_ns()
+  if not should_auto_refresh(session, current_buf, timestamp_ns) then
+    return
+  end
+
+  session.ui.auto_refresh.running = true
+  session.ui.auto_refresh.last_ns = timestamp_ns
+
+  vim.schedule(function()
+    if not session.buf or not vim.api.nvim_buf_is_valid(session.buf) then
+      session.ui.auto_refresh.running = false
+      return
+    end
+
+    state.refresh(session, function(err)
+      session.ui.auto_refresh.running = false
+      if not err and session.buf and vim.api.nvim_buf_is_valid(session.buf) then
+        M.render(session)
+      end
+    end)
+  end)
+end
+
+local function ensure_auto_refresh_autocmds(session, buf)
+  if not session.ui.auto_refresh.buf_autocmd_set then
+    vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
+      buffer = buf,
+      callback = function(args)
+        auto_refresh(state.by_buffer(args.buf))
+      end,
+    })
+    session.ui.auto_refresh.buf_autocmd_set = true
+  end
+
+  if auto_refresh_autocmd_set then
+    return
+  end
+
+  vim.api.nvim_create_autocmd({ "FocusGained", "ShellCmdPost", "VimResume" }, {
+    callback = function()
+      auto_refresh(state.current())
+    end,
+  })
+  auto_refresh_autocmd_set = true
 end
 
 local function file_path_group(meta)
@@ -494,6 +573,9 @@ local function ensure_buffer(session)
       state.unbind_buffer(buf)
       if session.buf == buf then
         session.buf = nil
+        if session.ui and session.ui.auto_refresh then
+          session.ui.auto_refresh.buf_autocmd_set = false
+        end
       end
     end,
   })
@@ -903,8 +985,11 @@ function M.open(session)
   end
 
   attach_keymaps(buf)
+  ensure_auto_refresh_autocmds(session, buf)
   M.render(session)
   M.refresh(session)
 end
+
+M._should_auto_refresh = should_auto_refresh
 
 return M
