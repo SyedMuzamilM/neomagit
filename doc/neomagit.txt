@@ -108,6 +108,7 @@ SETUP                                                             *neomagit-setu
     git = {
       bin = "git",
       timeout_ms = 15000,
+      diff_context = 3,
     },
     confirm = {
       destructive = true,
@@ -118,6 +119,8 @@ SETUP                                                             *neomagit-setu
 `ui.style = "magit"` renders a Magit-like status layout with Head/Merge/Push/Tag
 header lines and status-word file rows. Use `ui.style = "classic"` for the
 original layout.
+Set `git.diff_context` to control how many unchanged lines are shown around
+each diff hunk.
 
 Remote popup supports add/set-url/rename/remove/show flows.
 Stash popup supports create/apply/pop/drop plus include-untracked/all,

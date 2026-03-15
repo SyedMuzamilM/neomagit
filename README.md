@@ -126,6 +126,7 @@ require("neomagit").setup({
   git = {
     bin = "git",
     timeout_ms = 15000,
+    diff_context = 3,
   },
   confirm = {
     destructive = true,
@@ -135,6 +136,7 @@ require("neomagit").setup({
 
 `ui.style = "magit"` uses a Magit-like status layout (Head/Merge/Push/Tag header + status-word file rows).
 Set `ui.style = "classic"` to keep the previous neomagit layout.
+Set `git.diff_context` to control how many unchanged lines are shown around each diff hunk.
 
 ## Highlight Groups
 

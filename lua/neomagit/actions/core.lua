@@ -70,6 +70,24 @@ local function require_confirm(message)
   return transient.confirm(message, false)
 end
 
+local function hunk_apply_args(base_args, hunk)
+  local args = vim.deepcopy(base_args)
+  local has_context = false
+
+  for idx = 2, #(hunk and hunk.lines or {}) do
+    if (hunk.lines[idx] or ""):sub(1, 1) == " " then
+      has_context = true
+      break
+    end
+  end
+
+  if not has_context then
+    table.insert(args, #args, "--unidiff-zero")
+  end
+
+  return args
+end
+
 local function choose_commit(session, prompt, cb)
   local recent = (session.snapshot and session.snapshot.recent) or {}
   local items = {}
@@ -342,7 +360,7 @@ function M.stage_from_cursor()
   if meta.kind == "hunk" and meta.section == "unstaged" then
     run_serial(
       session,
-      { "apply", "--cached", "--unidiff-zero", "-" },
+      hunk_apply_args({ "apply", "--cached", "-" }, meta.hunk),
       { stdin = meta.hunk.patch },
       "Staged hunk"
     )
@@ -366,7 +384,7 @@ function M.unstage_from_cursor()
   if meta.kind == "hunk" and meta.section == "staged" then
     run_serial(
       session,
-      { "apply", "--cached", "-R", "--unidiff-zero", "-" },
+      hunk_apply_args({ "apply", "--cached", "-R", "-" }, meta.hunk),
       { stdin = meta.hunk.patch },
       "Unstaged hunk"
     )
@@ -393,7 +411,7 @@ function M.discard_from_cursor()
     end
     run_serial(
       session,
-      { "apply", "-R", "--unidiff-zero", "-" },
+      hunk_apply_args({ "apply", "-R", "-" }, meta.hunk),
       { stdin = meta.hunk.patch },
       "Discarded hunk"
     )

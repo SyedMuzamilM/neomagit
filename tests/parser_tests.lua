@@ -38,11 +38,16 @@ local function test_parse_diff()
     "index e69de29..4b825dc 100644",
     "--- a/lua/test.lua",
     "+++ b/lua/test.lua",
-    "@@ -0,0 +1 @@",
+    "@@ -1,3 +1,4 @@",
+    " local a = 1",
     "+print('hello')",
-    "@@ -5 +6 @@",
+    " local b = 2",
+    " local c = 3",
+    "@@ -5,3 +6,3 @@",
+    " keep_before()",
     "-old",
     "+new",
+    " keep_after()",
   }, "\n")
 
   local files = parsers.parse_unified_diff(input)
@@ -50,6 +55,8 @@ local function test_parse_diff()
   assert_eq(type(file), "table", "file parsed")
   assert_eq(#file.hunks, 2, "hunk count")
   assert_eq(file.hunks[1].meta.new_start, 1, "first hunk new start")
+  assert_eq(file.hunks[1].lines[2], " local a = 1", "leading context line preserved")
+  assert_eq(file.hunks[2].lines[#file.hunks[2].lines], " keep_after()", "trailing context line preserved")
 end
 
 local function test_parse_stash()

@@ -1,3 +1,4 @@
+local config = require("neomagit.config")
 local parsers = require("neomagit.git.parsers")
 local runner = require("neomagit.git.runner")
 
@@ -141,6 +142,8 @@ local function build_tracking_sections(branch, header, results)
 end
 
 function M.collect(context, cb)
+  local diff_context = math.max(0, tonumber(config.values.git.diff_context) or 0)
+
   run_tasks(context, {
     status = { args = { "status", "--porcelain=v1", "--branch", "--untracked-files=all" } },
     head_subject = { args = { "show", "-s", "--format=%s", "HEAD" } },
@@ -150,8 +153,8 @@ function M.collect(context, cb)
     push_subject = { args = { "show", "-s", "--format=%s", "@{push}" } },
     head_tag = { args = { "describe", "--tags", "--exact-match", "HEAD" } },
     head_short = { args = { "rev-parse", "--short", "HEAD" } },
-    diff_unstaged = { args = { "diff", "--no-color", "--unified=0" } },
-    diff_staged = { args = { "diff", "--cached", "--no-color", "--unified=0" } },
+    diff_unstaged = { args = { "diff", "--no-color", "--unified=" .. diff_context } },
+    diff_staged = { args = { "diff", "--cached", "--no-color", "--unified=" .. diff_context } },
     unpulled_upstream = { args = { "log", "--oneline", "..@{upstream}", "-n", "20" } },
     unmerged_upstream = { args = { "log", "--oneline", "@{upstream}..", "-n", "20" } },
     unpulled_push = { args = { "log", "--oneline", "..@{push}", "-n", "20" } },

@@ -23,6 +23,7 @@ local defaults = {
   git = {
     bin = "git",
     timeout_ms = 15000,
+    diff_context = 3,
   },
   confirm = {
     destructive = true,

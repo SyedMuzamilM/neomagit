@@ -450,6 +450,11 @@ local function render_section_header_magit(session, lines, line_map, key, title,
   local folded = session.ui.folded[key]
   local marker = folded and "[+] " or ""
   local text = string.format("%s%s (%d)", marker, title, count)
+
+  if count <= 0 then
+    return
+  end
+
   push(lines, line_map, text, {
     kind = "section",
     section = key,
@@ -823,9 +828,9 @@ local function render_snapshot_magit(session, lines, line_map, snapshot)
 
   for idx, spec in ipairs(section_specs) do
     render_section_magit(session, lines, line_map, spec.key, spec.title, spec.entries, spec.hunks, status_width)
-    if magit_opts.compact_sections ~= true and idx < #section_specs then
-      push(lines, line_map, "", { kind = "blank" })
-    end
+    -- if magit_opts.compact_sections ~= true and idx < #section_specs then
+    --   push(lines, line_map, "", { kind = "blank" })
+    -- end
   end
 
   render_tail_sections_magit(session, lines, line_map, snapshot)
