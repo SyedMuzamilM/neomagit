@@ -29,6 +29,9 @@ local function new_session(context)
         submodules = true,
       },
       file_folded = {},
+      commit_expanded = {},
+      commit_diff_cache = {},
+      commit_diff_loading = {},
       help_open = false,
       auto_refresh = {
         running = false,

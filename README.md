@@ -79,7 +79,7 @@ In status buffer:
 
 - `q` close
 - `g` refresh
-- `<Tab>` fold/unfold section or file
+- `<Tab>` fold/unfold section or file, or expand/collapse a commit's changes
 - `gd` jump to file/hunk
 - `?` toggle help
 - `s` stage (file/hunk)

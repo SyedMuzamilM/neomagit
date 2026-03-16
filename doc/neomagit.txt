@@ -60,7 +60,7 @@ Global:
 Status buffer:
   q                    Close
   g                    Refresh
-  <Tab>                Fold/unfold section or file
+  <Tab>                Fold/unfold section or file, or show commit changes
   gd                   Jump to file/hunk
   ?                    Toggle inline help
   s                    Stage file/hunk

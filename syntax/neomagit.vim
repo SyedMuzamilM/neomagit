@@ -8,9 +8,9 @@ syn match NeomagitSyntaxSection /^\%(\[[+-]\] \)\?.* (\d\+)$/
 syn match NeomagitSyntaxHunk /^    @@ .*@@.*$/
 syn match NeomagitSyntaxHunk /^  @@ .*@@.*$/
 syn match NeomagitSyntaxHint /^Press ? for keymap help\.$/
-syn match NeomagitSyntaxHelp /^\%(q close\|s stage\|c commit\|f fetch\|r rebase\|l open full log\).*$/
+syn match NeomagitSyntaxHelp /^\%(q close\|s stage\|c commit\|f fetch\|r rebase\|l open full log\|.*<Tab> fold\/unfold section, file, or commit.*\).*$/
 syn match NeomagitSyntaxStash /^  \d\+\. stash@{[0-9]\+}:.*$/
-syn match NeomagitSyntaxCommit /^  \d\+\. [0-9a-f]\{7,40} .*$/
+syn match NeomagitSyntaxCommit /^  \%(\[[+-]\] \)\?\d\+\. [0-9a-f]\{7,40} .*$/
 syn match NeomagitSyntaxFileStatus /^\%(modified\|new file\|deleted\|renamed\|copied\|untracked\|unmerged\|typechange\)\s\+.*$/
 
 hi def link NeomagitSyntaxTitle NeomagitTitle

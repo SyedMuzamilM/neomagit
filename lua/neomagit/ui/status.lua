@@ -1,4 +1,5 @@
 local config = require("neomagit.config")
+local runner = require("neomagit.git.runner")
 local state = require("neomagit.state.session")
 
 local M = {}
@@ -347,10 +348,36 @@ local function apply_highlights(session, lines)
           add_hl(session.buf, "NeomagitStash", row, ref_start - 1, ref_end)
         end
       elseif meta.kind == "commit" then
+        if meta.marker_start and meta.marker_end then
+          add_hl(session.buf, "NeomagitSectionMarker", row, meta.marker_start, meta.marker_end)
+        end
         add_hl(session.buf, "NeomagitMeta", row, 0, 5)
         local hash_start, hash_end = line:find("%x%x%x%x%x%x%x+")
         if hash_start and hash_end then
           add_hl(session.buf, "NeomagitHash", row, hash_start - 1, hash_end)
+        end
+      elseif meta.kind == "commit_diff" then
+        if meta.diff_line_type == "hunk" then
+          local marker_start = line:find("@@")
+          if marker_start then
+            local marker_end = line:find("@@", marker_start + 2, true)
+            if marker_end then
+              add_hl(session.buf, "NeomagitHunkMarker", row, marker_start - 1, marker_end + 1)
+            end
+          end
+          add_hl(session.buf, "NeomagitHunk", row, 0, -1)
+        elseif meta.diff_line_type == "add" then
+          add_line_hl(session.buf, "NeomagitDiffAddLine", row)
+          add_hl(session.buf, "NeomagitDiffAdd", row, 0, -1)
+        elseif meta.diff_line_type == "delete" then
+          add_line_hl(session.buf, "NeomagitDiffDeleteLine", row)
+          add_hl(session.buf, "NeomagitDiffDelete", row, 0, -1)
+        elseif meta.diff_line_type == "note" then
+          add_hl(session.buf, "NeomagitDiffNote", row, 0, -1)
+        elseif meta.diff_line_type == "info" then
+          add_hl(session.buf, "NeomagitMeta", row, 0, -1)
+        else
+          add_hl(session.buf, "NeomagitDiffContext", row, 0, -1)
         end
       elseif meta.kind == "worktree" then
         add_hl(session.buf, "NeomagitMeta", row, 0, 5)
@@ -382,6 +409,172 @@ end
 local function ensure_file_folded_state(session)
   session.ui.file_folded = session.ui.file_folded or {}
   return session.ui.file_folded
+end
+
+local function ensure_commit_preview_state(session)
+  session.ui.commit_expanded = session.ui.commit_expanded or {}
+  session.ui.commit_diff_cache = session.ui.commit_diff_cache or {}
+  session.ui.commit_diff_loading = session.ui.commit_diff_loading or {}
+  return session.ui.commit_expanded, session.ui.commit_diff_cache, session.ui.commit_diff_loading
+end
+
+local function commit_preview_key(section, commit)
+  local hash = tostring(commit and commit.hash or "")
+  if hash == "" then
+    return ""
+  end
+  return string.format("%s:%s", tostring(section or ""), hash)
+end
+
+local function commit_preview_state(session, section, commit)
+  local expanded, cache, loading = ensure_commit_preview_state(session)
+  local key = commit_preview_key(section, commit)
+  return key, expanded[key], cache[key], loading[key]
+end
+
+local function split_text_lines(text)
+  local lines = {}
+  if not text or text == "" then
+    return lines
+  end
+  text = text:gsub("\r\n", "\n")
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    table.insert(lines, line)
+  end
+  if lines[#lines] == "" then
+    table.remove(lines, #lines)
+  end
+  return lines
+end
+
+local function commit_diff_line_type(line)
+  local text = tostring(line or ""):gsub("^%s+", "")
+  if text == "" then
+    return "context"
+  end
+  if text:match("^@@") then
+    return "hunk"
+  end
+  if text:match("^diff %-%-git ") or text:match("^index ") or text:match("^similarity index ")
+      or text:match("^rename from ") or text:match("^rename to ") or text:match("^new file mode ")
+      or text:match("^deleted file mode ") or text:match("^Binary files ") or text:match("^submodule ") then
+    return "note"
+  end
+  if text:match("^commit ") or text:match("^Author: ") or text:match("^Date: ") then
+    return "info"
+  end
+  if text:sub(1, 3) == "+++" or text:sub(1, 3) == "---" then
+    return "note"
+  end
+  if text:sub(1, 1) == "+" then
+    return "add"
+  end
+  if text:sub(1, 1) == "-" then
+    return "delete"
+  end
+  if text:sub(1, 1) == "\\" then
+    return "note"
+  end
+  return "context"
+end
+
+local function render_commit_preview(lines, line_map, section, commit, preview_key, cache_entry, loading)
+  local commit_hash = commit and commit.hash or nil
+  if loading then
+    push(lines, line_map, "      Loading commit changes...", {
+      kind = "commit_diff",
+      section = section,
+      commit = commit,
+      commit_hash = commit_hash,
+      preview_key = preview_key,
+      diff_line_type = "info",
+    })
+    return
+  end
+
+  local preview_lines = cache_entry and cache_entry.lines or {}
+  local preview_error = cache_entry and cache_entry.error or nil
+  if preview_error and preview_error ~= "" then
+    push(lines, line_map, "      " .. preview_error, {
+      kind = "commit_diff",
+      section = section,
+      commit = commit,
+      commit_hash = commit_hash,
+      preview_key = preview_key,
+      diff_line_type = "info",
+    })
+    return
+  end
+
+  if #preview_lines == 0 then
+    push(lines, line_map, "      (no changes to show)", {
+      kind = "commit_diff",
+      section = section,
+      commit = commit,
+      commit_hash = commit_hash,
+      preview_key = preview_key,
+      diff_line_type = "info",
+    })
+    return
+  end
+
+  for _, preview_line in ipairs(preview_lines) do
+    push(lines, line_map, "      " .. preview_line, {
+      kind = "commit_diff",
+      section = section,
+      commit = commit,
+      commit_hash = commit_hash,
+      preview_key = preview_key,
+      diff_line_type = commit_diff_line_type(preview_line),
+    })
+  end
+end
+
+local function request_commit_preview(session, preview_key, commit)
+  if preview_key == "" then
+    return
+  end
+
+  local _, cache, loading_state = ensure_commit_preview_state(session)
+  if cache[preview_key] or loading_state[preview_key] then
+    return
+  end
+  loading_state[preview_key] = true
+
+  local commit_hash = tostring(commit and commit.hash or "")
+  if commit_hash == "" then
+    loading_state[preview_key] = nil
+    return
+  end
+
+  runner.run(session.context, {
+    "show",
+    "--stat",
+    "--patch",
+    "--format=",
+    "--no-color",
+    "--unified=" .. math.max(0, tonumber(config.values.git.diff_context) or 0),
+    commit_hash,
+  }, nil, function(res)
+    local _, cache_map, loading_map = ensure_commit_preview_state(session)
+    loading_map[preview_key] = nil
+
+    if res.ok then
+      cache_map[preview_key] = {
+        lines = split_text_lines(res.stdout),
+      }
+    else
+      local stderr = tostring(res.stderr or ""):gsub("%s+$", "")
+      cache_map[preview_key] = {
+        lines = {},
+        error = stderr ~= "" and stderr or ("Failed to show changes for " .. commit_hash),
+      }
+    end
+
+    if session.buf and vim.api.nvim_buf_is_valid(session.buf) then
+      M.render(session)
+    end
+  end)
 end
 
 local function is_file_folded(session, section, path, has_hunks)
@@ -489,11 +682,20 @@ local function render_commit_section_classic(session, lines, line_map, key, titl
     return
   end
   for idx, c in ipairs(commits or {}) do
-    push(lines, line_map, string.format("  %d. %s %s", idx, c.hash, c.subject), {
+    local preview_key, expanded, cache_entry, loading = commit_preview_state(session, key, c)
+    local marker = expanded and "[-] " or "[+] "
+    push(lines, line_map, string.format("  %s%d. %s %s", marker, idx, c.hash, c.subject), {
       kind = "commit",
+      section = key,
       commit = c,
       index = idx,
+      preview_key = preview_key,
+      marker_start = 2,
+      marker_end = 2 + #marker,
     })
+    if expanded then
+      render_commit_preview(lines, line_map, key, c, preview_key, cache_entry, loading)
+    end
   end
 end
 
@@ -608,11 +810,20 @@ local function render_commit_section_magit(session, lines, line_map, key, title,
     return
   end
   for idx, c in ipairs(commits or {}) do
-    push(lines, line_map, string.format("  %d. %s %s", idx, c.hash, c.subject), {
+    local preview_key, expanded, cache_entry, loading = commit_preview_state(session, key, c)
+    local marker = expanded and "[-] " or "[+] "
+    push(lines, line_map, string.format("  %s%d. %s %s", marker, idx, c.hash, c.subject), {
       kind = "commit",
+      section = key,
       commit = c,
       index = idx,
+      preview_key = preview_key,
+      marker_start = 2,
+      marker_end = 2 + #marker,
     })
+    if expanded then
+      render_commit_preview(lines, line_map, key, c, preview_key, cache_entry, loading)
+    end
   end
 end
 
@@ -708,6 +919,19 @@ function M.toggle_fold_under_cursor(session)
   if meta and (meta.kind == "file" or meta.kind == "hunk") and meta.fold_key and meta.has_hunks ~= false then
     ensure_file_folded_state(session)[meta.fold_key] = not is_file_folded(session, meta.section, meta.path, true)
     M.render(session)
+    return
+  end
+  if meta and (meta.kind == "commit" or meta.kind == "commit_diff") and meta.commit then
+    local expanded, cache, _ = ensure_commit_preview_state(session)
+    local preview_key = meta.preview_key or commit_preview_key(meta.section, meta.commit)
+    if preview_key == "" then
+      return
+    end
+    expanded[preview_key] = not expanded[preview_key]
+    if expanded[preview_key] and not cache[preview_key] then
+      request_commit_preview(session, preview_key, meta.commit)
+    end
+    M.render(session)
   end
 end
 
@@ -793,7 +1017,7 @@ local function render_help(lines, line_map, help_open)
   push(lines, line_map, "", { kind = "blank" })
   push(lines, line_map, "Press ? for keymap help.", { kind = "hint" })
   if help_open then
-    push(lines, line_map, "q close  g refresh  <Tab> fold/unfold section or file  ? toggle help", { kind = "help" })
+    push(lines, line_map, "q close  g refresh  <Tab> fold/unfold section, file, or commit  ? toggle help", { kind = "help" })
     push(lines, line_map, "gd jump to file/hunk", { kind = "help" })
     push(lines, line_map, "s stage  u unstage  x discard", { kind = "help" })
     push(lines, line_map, "c commit popup  C quick commit", { kind = "help" })
@@ -987,7 +1211,7 @@ local function attach_keymaps(buf)
   end, "Refresh status")
   map("<Tab>", function()
     M.toggle_fold_under_cursor()
-  end, "Fold or unfold section/file")
+  end, "Fold or unfold section/file/commit")
   map("gd", function()
     require("neomagit.actions.core").open_file_from_cursor()
   end, "Jump to file or hunk")
@@ -1089,5 +1313,6 @@ function M.open(session)
 end
 
 M._should_auto_refresh = should_auto_refresh
+M._commit_diff_line_type = commit_diff_line_type
 
 return M

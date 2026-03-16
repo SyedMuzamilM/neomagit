@@ -179,6 +179,9 @@ local function test_default_modified_sections_start_folded()
   assert_eq(session.ui.folded.unstaged, true, "unstaged section starts folded")
   assert_eq(session.ui.folded.untracked, false, "untracked section stays open")
   assert_eq(type(session.ui.file_folded), "table", "file fold state is tracked")
+  assert_eq(type(session.ui.commit_expanded), "table", "commit preview expansion state is tracked")
+  assert_eq(type(session.ui.commit_diff_cache), "table", "commit preview cache is tracked")
+  assert_eq(type(session.ui.commit_diff_loading), "table", "commit preview loading state is tracked")
 end
 
 local function test_hunk_target_line_tracks_new_file_lines()
@@ -199,6 +202,14 @@ local function test_hunk_target_line_tracks_new_file_lines()
   assert_eq(line, 13, "added line maps to current file line")
 end
 
+local function test_commit_diff_line_type_classification()
+  assert_eq(ui_status._commit_diff_line_type("@@ -1 +1 @@"), "hunk", "hunk headers classified")
+  assert_eq(ui_status._commit_diff_line_type("+added"), "add", "added lines classified")
+  assert_eq(ui_status._commit_diff_line_type("-removed"), "delete", "deleted lines classified")
+  assert_eq(ui_status._commit_diff_line_type("diff --git a/a b/a"), "note", "diff headers classified")
+  assert_eq(ui_status._commit_diff_line_type(" context"), "context", "context lines classified")
+end
+
 test_build_header_full()
 test_build_header_fallbacks()
 test_build_tracking_sections()
@@ -207,5 +218,6 @@ test_should_auto_refresh_only_active_valid_status_buffer()
 test_should_auto_refresh_debounces_while_running_or_recent()
 test_default_modified_sections_start_folded()
 test_hunk_target_line_tracks_new_file_lines()
+test_commit_diff_line_type_classification()
 
 print("status tests passed")
