@@ -263,6 +263,9 @@ local function apply_highlights(session, lines)
           add_hl(session.buf, "NeomagitSectionCount", row, count_start - 1, -1)
         end
       elseif meta.kind == "file" then
+        if meta.marker_start and meta.marker_end then
+          add_hl(session.buf, "NeomagitSectionMarker", row, meta.marker_start, meta.marker_end)
+        end
         if meta.style == "magit" then
           if meta.status_start and meta.status_end then
             add_hl(session.buf, item_status_group(meta), row, meta.status_start, meta.status_end)
@@ -271,12 +274,12 @@ local function apply_highlights(session, lines)
             add_hl(session.buf, "NeomagitItemPath", row, meta.path_start, -1)
           end
         else
-          add_hl(session.buf, file_sign_group(meta), row, 2, 3)
-          add_hl(session.buf, file_path_group(meta), row, 4, -1)
+          add_hl(session.buf, file_sign_group(meta), row, meta.sign_start or 2, meta.sign_end or 3)
+          add_hl(session.buf, file_path_group(meta), row, meta.path_start or 4, -1)
         end
       elseif meta.kind == "hunk" then
         if meta.hunk_line_type then
-          local offset = meta.style == "magit" and 4 or 6
+          local offset = meta.style == "magit" and 0 or 6
           local group = "NeomagitDiffContext"
           if meta.hunk_line_type == "+" then
             group = "NeomagitDiffAdd"
@@ -294,7 +297,7 @@ local function apply_highlights(session, lines)
               add_hl(session.buf, "NeomagitHunkMarker", row, marker_start - 1, marker_end + 1)
             end
           end
-          add_hl(session.buf, "NeomagitHunk", row, meta.style == "magit" and 2 or 4, -1)
+          add_hl(session.buf, "NeomagitHunk", row, meta.style == "magit" and 0 or 4, -1)
         end
       elseif meta.kind == "hint" then
         add_hl(session.buf, "NeomagitHint", row, 0, -1)
@@ -337,6 +340,27 @@ local function push(lines, line_map, text, meta)
   line_map[#lines] = meta
 end
 
+local function file_fold_key(section, path)
+  return string.format("%s:%s", tostring(section or ""), tostring(path or ""))
+end
+
+local function ensure_file_folded_state(session)
+  session.ui.file_folded = session.ui.file_folded or {}
+  return session.ui.file_folded
+end
+
+local function is_file_folded(session, section, path, has_hunks)
+  if not has_hunks then
+    return false
+  end
+  local key = file_fold_key(section, path)
+  local folded = ensure_file_folded_state(session)[key]
+  if folded == nil then
+    return true
+  end
+  return folded
+end
+
 local function sorted_entries(entries)
   local list = {}
   for _, item in ipairs(entries or {}) do
@@ -368,14 +392,24 @@ local function render_section_classic(session, lines, line_map, key, title, entr
   end
 
   for _, entry in ipairs(sorted_entries(entries)) do
-    push(lines, line_map, string.format("  %s %s", sign or entry.code or " ", entry.path), {
+    local file_hunks = hunk_map and hunk_map[entry.path]
+    local has_hunks = (file_hunks and #(file_hunks.hunks or {}) > 0) or false
+    local file_folded = is_file_folded(session, key, entry.path, has_hunks)
+    local marker = has_hunks and (file_folded and "[+] " or "[-] ") or ""
+    push(lines, line_map, string.format("%s%s %s", marker, sign or entry.code or " ", entry.path), {
       kind = "file",
       section = key,
       path = entry.path,
       entry = entry,
+      fold_key = file_fold_key(key, entry.path),
+      has_hunks = has_hunks,
+      marker_start = has_hunks and 0 or nil,
+      marker_end = has_hunks and #marker or nil,
+      sign_start = #marker,
+      sign_end = #marker + 1,
+      path_start = #marker + 2,
     })
-    local file_hunks = hunk_map and hunk_map[entry.path]
-    if file_hunks then
+    if file_hunks and not file_folded then
       for idx, hunk in ipairs(file_hunks.hunks or {}) do
         push(lines, line_map, string.format("    %s", hunk.header), {
           kind = "hunk",
@@ -383,6 +417,8 @@ local function render_section_classic(session, lines, line_map, key, title, entr
           path = entry.path,
           hunk_index = idx,
           hunk = hunk,
+          fold_key = file_fold_key(key, entry.path),
+          has_hunks = true,
         })
         for line_idx = 2, #(hunk.lines or {}) do
           local hline = hunk.lines[line_idx]
@@ -394,6 +430,8 @@ local function render_section_classic(session, lines, line_map, key, title, entr
             hunk = hunk,
             hunk_line = line_idx,
             hunk_line_type = hunk_line_type(hline),
+            fold_key = file_fold_key(key, entry.path),
+            has_hunks = true,
           })
         end
       end
@@ -475,31 +513,40 @@ local function render_section_magit(session, lines, line_map, key, title, entrie
 
   for _, entry in ipairs(sorted_entries(entries)) do
     local status = file_status_word(key, entry)
-    local text = string.format("%-" .. status_width .. "s  %s", status, entry.path)
+    local file_hunks = hunk_map and hunk_map[entry.path]
+    local has_hunks = (file_hunks and #(file_hunks.hunks or {}) > 0) or false
+    local file_folded = is_file_folded(session, key, entry.path, has_hunks)
+    local marker = has_hunks and (file_folded and "[+] " or "[-] ") or ""
+    local text = string.format("%s%-" .. status_width .. "s  %s", marker, status, entry.path)
     push(lines, line_map, text, {
       kind = "file",
       style = "magit",
       section = key,
       path = entry.path,
       entry = entry,
-      status_start = 0,
-      status_end = status_width,
-      path_start = status_width + 2,
+      fold_key = file_fold_key(key, entry.path),
+      has_hunks = has_hunks,
+      marker_start = has_hunks and 0 or nil,
+      marker_end = has_hunks and #marker or nil,
+      status_start = #marker,
+      status_end = #marker + status_width,
+      path_start = #marker + status_width + 2,
     })
-    local file_hunks = hunk_map and hunk_map[entry.path]
-    if file_hunks then
+    if file_hunks and not file_folded then
       for idx, hunk in ipairs(file_hunks.hunks or {}) do
-        push(lines, line_map, string.format("  %s", hunk.header), {
+        push(lines, line_map, hunk.header, {
           kind = "hunk",
           style = "magit",
           section = key,
           path = entry.path,
           hunk_index = idx,
           hunk = hunk,
+          fold_key = file_fold_key(key, entry.path),
+          has_hunks = true,
         })
         for line_idx = 2, #(hunk.lines or {}) do
           local hline = hunk.lines[line_idx]
-          push(lines, line_map, string.format("    %s", hline), {
+          push(lines, line_map, hline, {
             kind = "hunk",
             style = "magit",
             section = key,
@@ -508,6 +555,8 @@ local function render_section_magit(session, lines, line_map, key, title, entrie
             hunk = hunk,
             hunk_line = line_idx,
             hunk_line_type = hunk_line_type(hline),
+            fold_key = file_fold_key(key, entry.path),
+            has_hunks = true,
           })
         end
       end
@@ -619,6 +668,11 @@ function M.toggle_fold_under_cursor(session)
   if meta and meta.kind == "section" then
     session.ui.folded[meta.section] = not session.ui.folded[meta.section]
     M.render(session)
+    return
+  end
+  if meta and (meta.kind == "file" or meta.kind == "hunk") and meta.fold_key and meta.has_hunks ~= false then
+    ensure_file_folded_state(session)[meta.fold_key] = not is_file_folded(session, meta.section, meta.path, true)
+    M.render(session)
   end
 end
 
@@ -704,7 +758,8 @@ local function render_help(lines, line_map, help_open)
   push(lines, line_map, "", { kind = "blank" })
   push(lines, line_map, "Press ? for keymap help.", { kind = "hint" })
   if help_open then
-    push(lines, line_map, "q close  g refresh  <Tab> fold/unfold  ? toggle help", { kind = "help" })
+    push(lines, line_map, "q close  g refresh  <Tab> fold/unfold section or file  ? toggle help", { kind = "help" })
+    push(lines, line_map, "gd jump to file/hunk", { kind = "help" })
     push(lines, line_map, "s stage  u unstage  x discard", { kind = "help" })
     push(lines, line_map, "c commit popup  C quick commit", { kind = "help" })
     push(lines, line_map, "b branch  m remote popup  O quick remote add", { kind = "help" })
@@ -897,7 +952,10 @@ local function attach_keymaps(buf)
   end, "Refresh status")
   map("<Tab>", function()
     M.toggle_fold_under_cursor()
-  end, "Toggle section fold")
+  end, "Fold or unfold section/file")
+  map("gd", function()
+    require("neomagit.actions.core").open_file_from_cursor()
+  end, "Jump to file or hunk")
   map("?", function()
     M.toggle_help()
   end, "Toggle help")

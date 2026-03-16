@@ -60,7 +60,8 @@ Global:
 Status buffer:
   q                    Close
   g                    Refresh
-  <Tab>                Fold/unfold section
+  <Tab>                Fold/unfold section or file
+  gd                   Jump to file/hunk
   ?                    Toggle inline help
   s                    Stage file/hunk
   u                    Unstage file/hunk
@@ -121,6 +122,8 @@ header lines and status-word file rows. Use `ui.style = "classic"` for the
 original layout.
 Set `git.diff_context` to control how many unchanged lines are shown around
 each diff hunk.
+Staged and unstaged sections start folded by default.
+Files with diff hunks start folded by default inside those sections.
 
 Remote popup supports add/set-url/rename/remove/show flows.
 Stash popup supports create/apply/pop/drop plus include-untracked/all,

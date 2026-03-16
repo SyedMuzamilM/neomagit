@@ -351,6 +351,87 @@ local function extract_cursor_target()
   return session, meta
 end
 
+local function hunk_target_line(meta)
+  local hunk = meta and meta.hunk
+  local hunk_meta = hunk and hunk.meta or {}
+  local new_line = tonumber(hunk_meta.new_start or 1) or 1
+  local target_idx = tonumber(meta and meta.hunk_line or 1) or 1
+
+  if new_line < 1 then
+    new_line = 1
+  end
+
+  if not hunk or target_idx <= 1 then
+    return new_line
+  end
+
+  for idx = 2, target_idx do
+    local line = hunk.lines and hunk.lines[idx] or ""
+    local prefix = line:sub(1, 1)
+
+    if idx == target_idx then
+      return new_line
+    end
+
+    if prefix == " " or prefix == "+" then
+      new_line = new_line + 1
+    end
+  end
+
+  return new_line
+end
+
+local function repo_file_path(session, path)
+  if not session or not session.context or not path or path == "" then
+    return nil
+  end
+  if path:match("^/") then
+    return path
+  end
+  return session.context.root .. "/" .. path
+end
+
+local function file_target_line(session, meta)
+  if meta and meta.kind == "hunk" then
+    return hunk_target_line(meta)
+  end
+
+  local hunks = session
+    and session.snapshot
+    and session.snapshot.hunks
+    and session.snapshot.hunks[meta and meta.section or nil]
+  local file_hunks = hunks and hunks[meta and meta.path or nil]
+  local first_hunk = file_hunks and file_hunks.hunks and file_hunks.hunks[1]
+  if first_hunk then
+    return hunk_target_line({ hunk = first_hunk, hunk_line = 2 })
+  end
+
+  return 1
+end
+
+function M.open_file_from_cursor()
+  local session, meta = extract_cursor_target()
+  if not session then
+    return
+  end
+
+  if meta.kind ~= "file" and meta.kind ~= "hunk" then
+    notify("Move cursor to a file or hunk first", vim.log.levels.WARN)
+    return
+  end
+
+  local path = repo_file_path(session, meta.path)
+  if not path or not vim.loop.fs_stat(path) then
+    notify("File is not available in the working tree: " .. tostring(meta.path or ""), vim.log.levels.WARN)
+    return
+  end
+
+  vim.cmd("edit " .. vim.fn.fnameescape(path))
+
+  local line = file_target_line(session, meta)
+  pcall(vim.api.nvim_win_set_cursor, 0, { math.max(line, 1), 0 })
+end
+
 function M.stage_from_cursor()
   local session, meta = extract_cursor_target()
   if not session then
@@ -1168,5 +1249,7 @@ end
 function M.open_cherry_pick_popup()
   M.cherry_pick_popup()
 end
+
+M._hunk_target_line = hunk_target_line
 
 return M

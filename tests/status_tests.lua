@@ -45,6 +45,8 @@ if not _G.vim then
 end
 
 local status = require("neomagit.git.status")
+local state = require("neomagit.state.session")
+local actions = require("neomagit.actions.core")
 local ui_status = require("neomagit.ui.status")
 
 local function assert_eq(actual, expected, message)
@@ -170,11 +172,40 @@ local function test_should_auto_refresh_debounces_while_running_or_recent()
   assert_eq(ui_status._should_auto_refresh(session, 7, 100 + 200 * 1000 * 1000), true, "allows refresh after debounce")
 end
 
+local function test_default_modified_sections_start_folded()
+  local session = state.get_or_create({ root = "__test__/fold-defaults" })
+
+  assert_eq(session.ui.folded.staged, true, "staged section starts folded")
+  assert_eq(session.ui.folded.unstaged, true, "unstaged section starts folded")
+  assert_eq(session.ui.folded.untracked, false, "untracked section stays open")
+  assert_eq(type(session.ui.file_folded), "table", "file fold state is tracked")
+end
+
+local function test_hunk_target_line_tracks_new_file_lines()
+  local line = actions._hunk_target_line({
+    hunk = {
+      meta = { new_start = 12 },
+      lines = {
+        "@@ -10,2 +12,3 @@",
+        " context",
+        "-removed",
+        "+added",
+        " trailing",
+      },
+    },
+    hunk_line = 4,
+  })
+
+  assert_eq(line, 13, "added line maps to current file line")
+end
+
 test_build_header_full()
 test_build_header_fallbacks()
 test_build_tracking_sections()
 test_build_tracking_sections_dedup_push_remote()
 test_should_auto_refresh_only_active_valid_status_buffer()
 test_should_auto_refresh_debounces_while_running_or_recent()
+test_default_modified_sections_start_folded()
+test_hunk_target_line_tracks_new_file_lines()
 
 print("status tests passed")

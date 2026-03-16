@@ -16,8 +16,8 @@ local function new_session(context)
     ui = {
       folded = {
         conflicted = false,
-        staged = false,
-        unstaged = false,
+        staged = true,
+        unstaged = true,
         untracked = false,
         unpulled_upstream = true,
         unmerged_upstream = true,
@@ -28,6 +28,7 @@ local function new_session(context)
         worktrees = true,
         submodules = true,
       },
+      file_folded = {},
       help_open = false,
       auto_refresh = {
         running = false,

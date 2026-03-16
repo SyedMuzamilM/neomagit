@@ -79,7 +79,8 @@ In status buffer:
 
 - `q` close
 - `g` refresh
-- `<Tab>` fold/unfold section
+- `<Tab>` fold/unfold section or file
+- `gd` jump to file/hunk
 - `?` toggle help
 - `s` stage (file/hunk)
 - `u` unstage (file/hunk)
@@ -137,6 +138,8 @@ require("neomagit").setup({
 `ui.style = "magit"` uses a Magit-like status layout (Head/Merge/Push/Tag header + status-word file rows).
 Set `ui.style = "classic"` to keep the previous neomagit layout.
 Set `git.diff_context` to control how many unchanged lines are shown around each diff hunk.
+Staged and unstaged sections start folded by default.
+Files with diff hunks start folded by default inside those sections.
 
 ## Highlight Groups
 
