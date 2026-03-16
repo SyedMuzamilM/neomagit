@@ -30,6 +30,14 @@ local function ensure_highlights()
     return nil
   end
 
+  local function source_bg(source_name)
+    local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = source_name, link = false })
+    if ok and type(hl) == "table" then
+      return hl.bg
+    end
+    return nil
+  end
+
   local function set_fg_group(name, source_name, fallback_link, opts)
     opts = opts or {}
     local spec = { default = true }
@@ -39,6 +47,18 @@ local function ensure_highlights()
       spec.bold = opts.bold or false
       spec.italic = opts.italic or false
       spec.underline = opts.underline or false
+      spec.nocombine = true
+      vim.api.nvim_set_hl(0, name, spec)
+      return
+    end
+    vim.api.nvim_set_hl(0, name, { default = true, link = fallback_link })
+  end
+
+  local function set_bg_group(name, source_name, fallback_link)
+    local spec = { default = true }
+    local bg = source_bg(source_name)
+    if bg then
+      spec.bg = bg
       spec.nocombine = true
       vim.api.nvim_set_hl(0, name, spec)
       return
@@ -87,6 +107,8 @@ local function ensure_highlights()
   set_fg_group("NeomagitHeaderLabel", "Keyword", "Keyword", { bold = true })
   set_fg_group("NeomagitHeaderRef", "Directory", "Directory", { bold = true })
   set_fg_group("NeomagitHeaderSubject", "Comment", "Comment")
+  set_bg_group("NeomagitDiffAddLine", "DiffAdd", "DiffAdd")
+  set_bg_group("NeomagitDiffDeleteLine", "DiffDelete", "DiffDelete")
 
   highlights_defined = true
 end
@@ -221,6 +243,16 @@ local function add_hl(buf, group, row, start_col, end_col)
   pcall(vim.api.nvim_buf_add_highlight, buf, ns, group, row, start_col or 0, end_col or -1)
 end
 
+local function add_line_hl(buf, group, row)
+  if not group then
+    return
+  end
+  pcall(vim.api.nvim_buf_set_extmark, buf, ns, row, 0, {
+    line_hl_group = group,
+    priority = 150,
+  })
+end
+
 local function apply_highlights(session, lines)
   if config.values.ui.highlights == false then
     vim.api.nvim_buf_clear_namespace(session.buf, ns, 0, -1)
@@ -279,16 +311,19 @@ local function apply_highlights(session, lines)
         end
       elseif meta.kind == "hunk" then
         if meta.hunk_line_type then
-          local offset = meta.style == "magit" and 0 or 6
           local group = "NeomagitDiffContext"
+          local line_group
           if meta.hunk_line_type == "+" then
             group = "NeomagitDiffAdd"
+            line_group = "NeomagitDiffAddLine"
           elseif meta.hunk_line_type == "-" then
             group = "NeomagitDiffDelete"
+            line_group = "NeomagitDiffDeleteLine"
           elseif meta.hunk_line_type == "\\" then
             group = "NeomagitDiffNote"
           end
-          add_hl(session.buf, group, row, offset, -1)
+          add_line_hl(session.buf, line_group, row)
+          add_hl(session.buf, group, row, 0, -1)
         else
           local marker_start = line:find("@@")
           if marker_start then
