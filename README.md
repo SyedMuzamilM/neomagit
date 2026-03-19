@@ -4,6 +4,7 @@
 
 It provides a central status buffer with section-based Git workflows:
 
+- visible current-branch and local-branches UI in the status buffer
 - stage/unstage/discard (file and hunk)
 - commit/amend/fixup/squash
 - branch flows
@@ -79,6 +80,7 @@ In status buffer:
 
 - `q` close
 - `g` refresh
+- `<CR>` switch to branch under cursor
 - `<Tab>` fold/unfold section or file, or expand/collapse a commit's changes
 - `gd` jump to file/hunk
 - `?` toggle help
@@ -88,6 +90,7 @@ In status buffer:
 - `c` commit popup
 - `C` quick commit
 - `b` branch popup
+- `B` create branch
 - `m` remote popup
 - `O` quick add remote
 - `z` stash popup
@@ -140,6 +143,9 @@ Set `ui.style = "classic"` to keep the previous neomagit layout.
 Set `git.diff_context` to control how many unchanged lines are shown around each diff hunk.
 Staged and unstaged sections start folded by default.
 Files with diff hunks start folded by default inside those sections.
+The `Branches` section stays open by default so you can see the current branch,
+inspect local branches, press `<CR>` on a branch to switch, or press `B` to
+create a new branch immediately.
 
 ## Highlight Groups
 

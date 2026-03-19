@@ -136,6 +136,26 @@ local function test_build_tracking_sections_dedup_push_remote()
   assert_eq(#sections, 2, "push tracking deduped when same as upstream")
 end
 
+local function test_build_local_branches_marks_current_and_sorts_first()
+  local branches = status._build_local_branches({
+    ok = true,
+    stdout = table.concat({
+      " \tfeature/api\torigin/feature/api",
+      "*\tmain\torigin/main",
+      " \tzzz\t",
+    }, "\n"),
+  }, {
+    head = "main",
+    detached = false,
+  })
+
+  assert_eq(#branches, 3, "local branch count")
+  assert_eq(branches[1].name, "main", "current branch sorted first")
+  assert_eq(branches[1].current, true, "current branch flagged")
+  assert_eq(branches[2].name, "feature/api", "remaining branches sorted alphabetically")
+  assert_eq(branches[2].upstream, "origin/feature/api", "upstream preserved")
+end
+
 local function test_should_auto_refresh_only_active_valid_status_buffer()
   local session = {
     buf = 5,
@@ -175,6 +195,7 @@ end
 local function test_default_modified_sections_start_folded()
   local session = state.get_or_create({ root = "__test__/fold-defaults" })
 
+  assert_eq(session.ui.folded.branches, false, "branches section starts open")
   assert_eq(session.ui.folded.staged, true, "staged section starts folded")
   assert_eq(session.ui.folded.unstaged, true, "unstaged section starts folded")
   assert_eq(session.ui.folded.untracked, false, "untracked section stays open")
@@ -214,6 +235,7 @@ test_build_header_full()
 test_build_header_fallbacks()
 test_build_tracking_sections()
 test_build_tracking_sections_dedup_push_remote()
+test_build_local_branches_marks_current_and_sorts_first()
 test_should_auto_refresh_only_active_valid_status_buffer()
 test_should_auto_refresh_debounces_while_running_or_recent()
 test_default_modified_sections_start_folded()

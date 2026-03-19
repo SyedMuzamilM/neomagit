@@ -171,6 +171,14 @@ local function current_branch(session)
   return branch.head or "HEAD"
 end
 
+local function branch_under_cursor(session)
+  local meta = ui.cursor_meta(session)
+  if meta and meta.kind == "branch" and meta.branch then
+    return meta.branch
+  end
+  return nil
+end
+
 local function default_remote(session)
   local branch = session.snapshot and session.snapshot.branch or {}
   local upstream_remote = parse_remote_branch(branch.upstream)
@@ -621,11 +629,7 @@ function M.branch_popup()
     end
 
     if choice.action == "create" then
-      transient.input("New branch name: ", "", function(name)
-        if name and name ~= "" then
-          run_serial(session, { "switch", "-c", name }, nil, "Switched to new branch " .. name)
-        end
-      end)
+      M.create_branch_quick()
       return
     end
 
@@ -656,6 +660,39 @@ function M.branch_popup()
       end)
     end)
   end)
+end
+
+function M.create_branch_quick()
+  local session = current_session()
+  if not session then
+    return
+  end
+
+  transient.input("New branch name: ", "", function(name)
+    if name and name ~= "" then
+      run_serial(session, { "switch", "-c", name }, nil, "Switched to new branch " .. name)
+    end
+  end)
+end
+
+function M.switch_branch_from_cursor()
+  local session = current_session()
+  if not session then
+    return
+  end
+
+  local branch = branch_under_cursor(session)
+  if not branch then
+    notify("Move cursor to a branch first", vim.log.levels.WARN)
+    return
+  end
+
+  if branch.current then
+    notify("Already on " .. branch.name, vim.log.levels.INFO)
+    return
+  end
+
+  run_serial(session, { "switch", branch.name }, nil, "Switched to " .. branch.name)
 end
 
 function M.add_remote_quick()

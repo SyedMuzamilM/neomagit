@@ -347,6 +347,16 @@ local function apply_highlights(session, lines)
         if ref_start and ref_end then
           add_hl(session.buf, "NeomagitStash", row, ref_start - 1, ref_end)
         end
+      elseif meta.kind == "branch" then
+        if meta.marker_start and meta.marker_end then
+          add_hl(session.buf, meta.current and "NeomagitSectionMarker" or "NeomagitMeta", row, meta.marker_start, meta.marker_end)
+        end
+        if meta.name_start and meta.name_end then
+          add_hl(session.buf, meta.current and "NeomagitHeaderRef" or "NeomagitItemPath", row, meta.name_start, meta.name_end)
+        end
+        if meta.upstream_start then
+          add_hl(session.buf, "NeomagitMeta", row, meta.upstream_start, -1)
+        end
       elseif meta.kind == "commit" then
         if meta.marker_start and meta.marker_end then
           add_hl(session.buf, "NeomagitSectionMarker", row, meta.marker_start, meta.marker_end)
@@ -699,6 +709,34 @@ local function render_commit_section_classic(session, lines, line_map, key, titl
   end
 end
 
+local function render_branch_section_classic(session, lines, line_map, branches)
+  if render_header_classic(session, lines, line_map, "branches", "Branches", #(branches or {})) then
+    return
+  end
+
+  for idx, branch in ipairs(branches or {}) do
+    local marker = branch.current and "*" or " "
+    local text = string.format("  %s %s", marker, branch.name)
+    local upstream_start
+    if branch.upstream and branch.upstream ~= "" then
+      upstream_start = #text + 4
+      text = text .. " -> " .. branch.upstream
+    end
+
+    push(lines, line_map, text, {
+      kind = "branch",
+      branch = branch,
+      current = branch.current,
+      index = idx,
+      marker_start = 2,
+      marker_end = 3,
+      name_start = 4,
+      name_end = 4 + #branch.name,
+      upstream_start = upstream_start,
+    })
+  end
+end
+
 local status_words = {
   M = "modified",
   A = "new file",
@@ -824,6 +862,34 @@ local function render_commit_section_magit(session, lines, line_map, key, title,
     if expanded then
       render_commit_preview(lines, line_map, key, c, preview_key, cache_entry, loading)
     end
+  end
+end
+
+local function render_branch_section_magit(session, lines, line_map, branches)
+  if render_header_magit(session, lines, line_map, "branches", "Branches", #(branches or {})) then
+    return
+  end
+
+  for idx, branch in ipairs(branches or {}) do
+    local marker = branch.current and "*" or " "
+    local text = string.format("  %s %s", marker, branch.name)
+    local upstream_start
+    if branch.upstream and branch.upstream ~= "" then
+      upstream_start = #text + 4
+      text = text .. " -> " .. branch.upstream
+    end
+
+    push(lines, line_map, text, {
+      kind = "branch",
+      branch = branch,
+      current = branch.current,
+      index = idx,
+      marker_start = 2,
+      marker_end = 3,
+      name_start = 4,
+      name_end = 4 + #branch.name,
+      upstream_start = upstream_start,
+    })
   end
 end
 
@@ -1018,6 +1084,7 @@ local function render_help(lines, line_map, help_open)
   push(lines, line_map, "Press ? for keymap help.", { kind = "hint" })
   if help_open then
     push(lines, line_map, "q close  g refresh  <Tab> fold/unfold section, file, or commit  ? toggle help", { kind = "help" })
+    push(lines, line_map, "<CR> switch branch at cursor  B create new branch", { kind = "help" })
     push(lines, line_map, "gd jump to file/hunk", { kind = "help" })
     push(lines, line_map, "s stage  u unstage  x discard", { kind = "help" })
     push(lines, line_map, "c commit popup  C quick commit", { kind = "help" })
@@ -1044,6 +1111,8 @@ local function render_snapshot_classic(session, lines, line_map, snapshot)
   if snapshot.operation then
     push(lines, line_map, "Operation: " .. snapshot.operation, { kind = "meta" })
   end
+  push(lines, line_map, "", { kind = "blank" })
+  render_branch_section_classic(session, lines, line_map, snapshot.branches or {})
   push(lines, line_map, "", { kind = "blank" })
 
   local s = snapshot.sections or {}
@@ -1131,6 +1200,9 @@ local function render_snapshot_magit(session, lines, line_map, snapshot)
     push(lines, line_map, "", { kind = "blank" })
   end
 
+  render_branch_section_magit(session, lines, line_map, snapshot.branches or {})
+  push(lines, line_map, "", { kind = "blank" })
+
   local s = snapshot.sections or {}
   local status_width = 12
   local section_specs = {
@@ -1209,6 +1281,9 @@ local function attach_keymaps(buf)
   map("g", function()
     M.refresh()
   end, "Refresh status")
+  map("<CR>", function()
+    require("neomagit.actions.core").switch_branch_from_cursor()
+  end, "Switch branch at cursor")
   map("<Tab>", function()
     M.toggle_fold_under_cursor()
   end, "Fold or unfold section/file/commit")
@@ -1237,6 +1312,9 @@ local function attach_keymaps(buf)
   map("b", function()
     require("neomagit.actions.core").branch_popup()
   end, "Branch popup")
+  map("B", function()
+    require("neomagit.actions.core").create_branch_quick()
+  end, "Create branch")
   map("m", function()
     require("neomagit.actions.core").remote_popup()
   end, "Remote popup")

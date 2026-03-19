@@ -15,6 +15,7 @@ local function new_session(context)
     queue = {},
     ui = {
       folded = {
+        branches = false,
         conflicted = false,
         staged = true,
         unstaged = true,

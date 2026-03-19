@@ -60,6 +60,7 @@ Global:
 Status buffer:
   q                    Close
   g                    Refresh
+  <CR>                 Switch to branch under cursor
   <Tab>                Fold/unfold section or file, or show commit changes
   gd                   Jump to file/hunk
   ?                    Toggle inline help
@@ -69,6 +70,7 @@ Status buffer:
   c                    Commit popup
   C                    Quick commit
   b                    Branch popup
+  B                    Create branch
   m                    Remote popup
   O                    Quick add remote
   z                    Stash popup
@@ -124,6 +126,8 @@ Set `git.diff_context` to control how many unchanged lines are shown around
 each diff hunk.
 Staged and unstaged sections start folded by default.
 Files with diff hunks start folded by default inside those sections.
+The Branches section stays open by default and shows local branches directly in
+the status buffer; press <CR> on a branch to switch or B to create a new one.
 
 Remote popup supports add/set-url/rename/remove/show flows.
 Stash popup supports create/apply/pop/drop plus include-untracked/all,

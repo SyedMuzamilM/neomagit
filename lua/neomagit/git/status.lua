@@ -141,6 +141,38 @@ local function build_tracking_sections(branch, header, results)
   return sections
 end
 
+local function build_local_branches(result, branch)
+  if not result or not result.ok then
+    return {}
+  end
+
+  local current = trim(branch and branch.head or "")
+  local detached = branch and branch.detached or false
+  local branches = {}
+
+  for line in ((result.stdout or "") .. "\n"):gmatch("(.-)\n") do
+    if line ~= "" then
+      local head_mark, name, upstream = line:match("^([%* ])\t([^\t]+)\t?(.*)$")
+      if name and name ~= "" then
+        table.insert(branches, {
+          name = name,
+          upstream = trim(upstream),
+          current = head_mark == "*" or (not detached and name == current),
+        })
+      end
+    end
+  end
+
+  table.sort(branches, function(a, b)
+    if a.current ~= b.current then
+      return a.current
+    end
+    return a.name < b.name
+  end)
+
+  return branches
+end
+
 function M.collect(context, cb)
   local diff_context = math.max(0, tonumber(config.values.git.diff_context) or 0)
 
@@ -161,6 +193,7 @@ function M.collect(context, cb)
     unmerged_push = { args = { "log", "--oneline", "@{push}..", "-n", "20" } },
     stash_list = { args = { "stash", "list" } },
     log = { args = { "log", "--oneline", "-n", "20" } },
+    local_branches = { args = { "for-each-ref", "--format=%(HEAD)\t%(refname:short)\t%(upstream:short)", "refs/heads" } },
     worktrees = { args = { "worktree", "list", "--porcelain" } },
     submodules = { args = { "submodule", "status", "--recursive" } },
   }, function(results)
@@ -181,6 +214,7 @@ function M.collect(context, cb)
       branch = branch,
       header = header,
       tracking = tracking,
+      branches = build_local_branches(results.local_branches, branch),
       sections = parsed.sections,
       hunks = {
         unstaged = diff_unstaged,
@@ -200,5 +234,6 @@ end
 
 M._build_header = build_header
 M._build_tracking_sections = build_tracking_sections
+M._build_local_branches = build_local_branches
 
 return M
